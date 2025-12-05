@@ -1,22 +1,12 @@
 // packages/web/src/components/Dashboard.tsx
 
-import {
-  ClipboardList,
-  LayoutGrid,
-  LogOut,
-  MapPin,
-  Package,
-  Settings,
-  Table,
-  Upload,
-} from 'lucide-react';
+import { ClipboardList, LayoutGrid, LogOut, MapPin, Package, Settings, Table } from 'lucide-react';
 import { useState } from 'react';
 import { useMachines, useSummary } from '../hooks/useMachines';
 import { useAuth } from '../lib/auth';
 import { EditableTable } from './EditableTable';
 import { FloorLayoutDashboard } from './FloorLayoutDashboard';
 import { MachineCard } from './MachineCard';
-import { OrderImport } from './OrderImport';
 import { SummaryBar } from './SummaryBar';
 import { Button } from './ui/button';
 
@@ -24,7 +14,6 @@ type Page = 'dashboard' | 'parts' | 'orders' | 'machines';
 
 export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) {
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'floor'>('grid');
-  const [showImport, setShowImport] = useState(false);
   const { data: machines = [], isLoading, error, refetch } = useMachines();
   const { data: summary } = useSummary();
   const { user, logout, hasRole } = useAuth();
@@ -95,10 +84,6 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) 
                 <ClipboardList className="h-4 w-4 mr-2" />
                 Orders
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-                <Upload className="h-4 w-4 mr-2" />
-                Import
-              </Button>
             </>
           )}
 
@@ -139,10 +124,6 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) 
       <footer className="mt-6 text-center text-sm text-slate-500">
         {machines.length} machines connected • Auto-refreshing every 2 seconds
       </footer>
-
-      {showImport && (
-        <OrderImport onClose={() => setShowImport(false)} onSuccess={() => refetch()} />
-      )}
     </div>
   );
 }
