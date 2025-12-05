@@ -403,7 +403,7 @@ export function OrdersPage() {
                   <div>
                     <label
                       htmlFor="partNumber"
-                      className="block text-sm font-medium text-slate-300 mb-1"
+                      className="block text-sm font-medium text-slate-600 mb-1"
                     >
                       Part
                     </label>
@@ -411,7 +411,7 @@ export function OrdersPage() {
                       id="partNumber"
                       value={form.partNumber}
                       onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
-                      className="w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
+                      className="w-full h-9 rounded border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                       required
                     >
                       <option value="">Select part...</option>
@@ -425,7 +425,7 @@ export function OrdersPage() {
                   <div>
                     <label
                       htmlFor="quantityRequired"
-                      className="block text-sm font-medium text-slate-300 mb-1"
+                      className="block text-sm font-medium text-slate-600 mb-1"
                     >
                       Quantity Required
                     </label>
@@ -442,14 +442,14 @@ export function OrdersPage() {
               )}
               {editingOrder && (
                 <div>
-                  <label htmlFor="status" className="block text-sm font-medium text-slate-300 mb-1">
+                  <label htmlFor="status" className="block text-sm font-medium text-slate-600 mb-1">
                     Status
                   </label>
                   <select
                     id="status"
                     value={form.status}
                     onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                    className="w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
+                    className="w-full h-9 rounded border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                   >
                     <option value="pending">Pending</option>
                     <option value="assigned">Assigned</option>
@@ -460,7 +460,7 @@ export function OrdersPage() {
                 </div>
               )}
               {saveMutation.isError && (
-                <p className="text-red-400 text-sm">{(saveMutation.error as Error).message}</p>
+                <p className="text-red-500 text-sm">{(saveMutation.error as Error).message}</p>
               )}
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>

@@ -279,7 +279,7 @@ export function MachinesPage() {
                         floorRow: (e.target.value as 'top' | 'middle' | 'bottom') || null,
                       })
                     }
-                    className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   >
                     <option value="">Not set</option>
                     <option value="top">Top Row</option>
@@ -311,7 +311,7 @@ export function MachinesPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, inputMode: e.target.value as 'auto' | 'manual' })
                     }
-                    className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   >
                     <option value="auto">Auto (ESP32)</option>
                     <option value="manual">Manual</option>
