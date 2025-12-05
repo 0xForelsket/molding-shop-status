@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowLeft, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAuthHeader } from '../lib/auth';
 import { cn } from '../lib/utils';
@@ -53,7 +53,7 @@ async function fetchParts(): Promise<Part[]> {
   return res.json();
 }
 
-export function OrdersPage({ onBack }: { onBack: () => void }) {
+export function OrdersPage() {
   const queryClient = useQueryClient();
   const { data: ordersRaw = [], isLoading } = useQuery({
     queryKey: ['orders'],
@@ -318,19 +318,9 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
   );
 
   return (
-    <div className="min-h-screen p-6">
-      <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            className="text-slate-600 hover:text-slate-900"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-semibold text-slate-900">Production Orders</h1>
-        </div>
+    <>
+      <header className="h-14 bg-white border-b border-slate-200 flex justify-between items-center px-6">
+        <h1 className="text-lg font-semibold text-slate-800">Production Orders</h1>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
             <Upload className="h-4 w-4 mr-2" />
@@ -348,175 +338,177 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
         </div>
       </header>
 
-      {/* Status Filter Tabs */}
-      <div className="flex gap-2 mb-4">
-        {['all', 'pending', 'assigned', 'running', 'completed', 'cancelled'].map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStatusFilter(s)}
-            className={cn(
-              'px-3 py-1.5 rounded text-sm font-medium transition-colors border',
-              statusFilter === s
-                ? 'bg-white border-slate-300 text-slate-900 shadow-sm'
-                : 'bg-slate-100 border-transparent text-slate-600 hover:bg-slate-200'
-            )}
-          >
-            {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
-            {s !== 'all' && (
-              <span className="ml-1.5 text-xs opacity-70">
-                ({orders.filter((o) => o.status === s).length})
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-300 border-t-emerald-600" />
+      <div className="flex-1 p-6 overflow-auto">
+        {/* Status Filter Tabs */}
+        <div className="flex gap-2 mb-4">
+          {['all', 'pending', 'assigned', 'running', 'completed', 'cancelled'].map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStatusFilter(s)}
+              className={cn(
+                'px-3 py-1.5 rounded text-sm font-medium transition-colors border',
+                statusFilter === s
+                  ? 'bg-white border-slate-300 text-slate-900 shadow-sm'
+                  : 'bg-slate-100 border-transparent text-slate-600 hover:bg-slate-200'
+              )}
+            >
+              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+              {s !== 'all' && (
+                <span className="ml-1.5 text-xs opacity-70">
+                  ({orders.filter((o) => o.status === s).length})
+                </span>
+              )}
+            </button>
+          ))}
         </div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={filteredOrders}
-          searchKey="orderNumber"
-          searchPlaceholder="Search by order number..."
-        />
-      )}
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingOrder ? 'Edit Order' : 'Add New Order'}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            {!editingOrder && (
-              <>
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-300 border-t-emerald-600" />
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={filteredOrders}
+            searchKey="orderNumber"
+            searchPlaceholder="Search by order number..."
+          />
+        )}
+
+        {/* Add/Edit Dialog */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editingOrder ? 'Edit Order' : 'Add New Order'}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+              {!editingOrder && (
+                <>
+                  <div>
+                    <label
+                      htmlFor="orderNumber"
+                      className="block text-sm font-medium text-slate-300 mb-1"
+                    >
+                      Order Number
+                    </label>
+                    <Input
+                      id="orderNumber"
+                      value={form.orderNumber}
+                      onChange={(e) => setForm((f) => ({ ...f, orderNumber: e.target.value }))}
+                      placeholder="e.g., 1354981"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="partNumber"
+                      className="block text-sm font-medium text-slate-300 mb-1"
+                    >
+                      Part
+                    </label>
+                    <select
+                      id="partNumber"
+                      value={form.partNumber}
+                      onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
+                      className="w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
+                      required
+                    >
+                      <option value="">Select part...</option>
+                      {parts.map((p) => (
+                        <option key={p.partNumber} value={p.partNumber}>
+                          {p.partNumber} - {p.partName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="quantityRequired"
+                      className="block text-sm font-medium text-slate-300 mb-1"
+                    >
+                      Quantity Required
+                    </label>
+                    <Input
+                      id="quantityRequired"
+                      type="number"
+                      value={form.quantityRequired}
+                      onChange={(e) => setForm((f) => ({ ...f, quantityRequired: e.target.value }))}
+                      placeholder="e.g., 5000"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+              {editingOrder && (
                 <div>
-                  <label
-                    htmlFor="orderNumber"
-                    className="block text-sm font-medium text-slate-300 mb-1"
-                  >
-                    Order Number
-                  </label>
-                  <Input
-                    id="orderNumber"
-                    value={form.orderNumber}
-                    onChange={(e) => setForm((f) => ({ ...f, orderNumber: e.target.value }))}
-                    placeholder="e.g., 1354981"
-                    required
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="partNumber"
-                    className="block text-sm font-medium text-slate-300 mb-1"
-                  >
-                    Part
+                  <label htmlFor="status" className="block text-sm font-medium text-slate-300 mb-1">
+                    Status
                   </label>
                   <select
-                    id="partNumber"
-                    value={form.partNumber}
-                    onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
+                    id="status"
+                    value={form.status}
+                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
                     className="w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
-                    required
                   >
-                    <option value="">Select part...</option>
-                    {parts.map((p) => (
-                      <option key={p.partNumber} value={p.partNumber}>
-                        {p.partNumber} - {p.partName}
-                      </option>
-                    ))}
+                    <option value="pending">Pending</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="running">Running</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
-                <div>
-                  <label
-                    htmlFor="quantityRequired"
-                    className="block text-sm font-medium text-slate-300 mb-1"
-                  >
-                    Quantity Required
-                  </label>
-                  <Input
-                    id="quantityRequired"
-                    type="number"
-                    value={form.quantityRequired}
-                    onChange={(e) => setForm((f) => ({ ...f, quantityRequired: e.target.value }))}
-                    placeholder="e.g., 5000"
-                    required
-                  />
-                </div>
-              </>
-            )}
-            {editingOrder && (
-              <div>
-                <label htmlFor="status" className="block text-sm font-medium text-slate-300 mb-1">
-                  Status
-                </label>
-                <select
-                  id="status"
-                  value={form.status}
-                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                  className="w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
-                >
-                  <option value="pending">Pending</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="running">Running</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+              )}
+              {saveMutation.isError && (
+                <p className="text-red-400 text-sm">{(saveMutation.error as Error).message}</p>
+              )}
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? 'Saving...' : 'Save'}
+                </Button>
               </div>
-            )}
-            {saveMutation.isError && (
-              <p className="text-red-400 text-sm">{(saveMutation.error as Error).message}</p>
-            )}
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-      {/* Import Dialog */}
-      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import Orders from Excel</DialogTitle>
-          </DialogHeader>
-          <div className="mt-4 space-y-4">
-            <p className="text-sm text-slate-400">
-              Paste data with 3 columns: <strong>Order #</strong>, <strong>Part #</strong>,{' '}
-              <strong>Quantity</strong> (tab-separated)
-            </p>
-            <textarea
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              placeholder={'1354981\t141929-00\t5000\n1354982\t147933-00\t3000'}
-              className="w-full h-40 px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-sm font-mono resize-none"
-            />
-            {importMutation.isError && (
-              <p className="text-red-400 text-sm">{(importMutation.error as Error).message}</p>
-            )}
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => importMutation.mutate(importText)}
-                disabled={importMutation.isPending || !importText.trim()}
-              >
-                {importMutation.isPending ? 'Importing...' : 'Import'}
-              </Button>
+        {/* Import Dialog */}
+        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Import Orders from Excel</DialogTitle>
+            </DialogHeader>
+            <div className="mt-4 space-y-4">
+              <p className="text-sm text-slate-400">
+                Paste data with 3 columns: <strong>Order #</strong>, <strong>Part #</strong>,{' '}
+                <strong>Quantity</strong> (tab-separated)
+              </p>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder={'1354981\t141929-00\t5000\n1354982\t147933-00\t3000'}
+                className="w-full h-40 px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-sm font-mono resize-none"
+              />
+              {importMutation.isError && (
+                <p className="text-red-400 text-sm">{(importMutation.error as Error).message}</p>
+              )}
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => importMutation.mutate(importText)}
+                  disabled={importMutation.isPending || !importText.trim()}
+                >
+                  {importMutation.isPending ? 'Importing...' : 'Import'}
+                </Button>
+              </div>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { AppLayout, type Page } from './components/AppLayout';
 import { Dashboard } from './components/Dashboard';
 import { MachinesPage } from './components/MachinesPage';
 import { OrdersPage } from './components/OrdersPage';
@@ -18,8 +19,6 @@ const queryClient = new QueryClient({
   },
 });
 
-type Page = 'dashboard' | 'parts' | 'orders' | 'machines';
-
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
 
@@ -27,10 +26,12 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ProtectedRoute>
-          {page === 'dashboard' && <Dashboard onNavigate={setPage} />}
-          {page === 'parts' && <PartsPage onBack={() => setPage('dashboard')} />}
-          {page === 'orders' && <OrdersPage onBack={() => setPage('dashboard')} />}
-          {page === 'machines' && <MachinesPage onBack={() => setPage('dashboard')} />}
+          <AppLayout currentPage={page} onNavigate={setPage}>
+            {page === 'dashboard' && <Dashboard />}
+            {page === 'parts' && <PartsPage />}
+            {page === 'orders' && <OrdersPage />}
+            {page === 'machines' && <MachinesPage />}
+          </AppLayout>
         </ProtectedRoute>
       </AuthProvider>
     </QueryClientProvider>

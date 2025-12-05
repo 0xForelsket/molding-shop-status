@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAuthHeader } from '../lib/auth';
 import { Button } from './ui/button';
@@ -23,7 +23,7 @@ async function fetchParts(): Promise<Part[]> {
   return res.json();
 }
 
-export function PartsPage({ onBack }: { onBack: () => void }) {
+export function PartsPage() {
   const queryClient = useQueryClient();
   const { data: parts = [], isLoading } = useQuery({ queryKey: ['parts'], queryFn: fetchParts });
 
@@ -114,7 +114,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
         accessorKey: 'productLine',
         header: 'Product Line',
         cell: ({ row }) => (
-          <span className="text-slate-400">{row.getValue('productLine') || '-'}</span>
+          <span className="text-slate-500">{row.getValue('productLine') || '-'}</span>
         ),
       },
       {
@@ -150,19 +150,9 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
   );
 
   return (
-    <div className="min-h-screen p-6">
-      <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            className="text-slate-600 hover:text-slate-900"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-semibold text-slate-900">Parts Catalog</h1>
-        </div>
+    <>
+      <header className="h-14 bg-white border-b border-slate-200 flex justify-between items-center px-6">
+        <h1 className="text-lg font-semibold text-slate-800">Parts Catalog</h1>
         <Button
           onClick={() => {
             setEditingPart(null);
@@ -174,18 +164,20 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
         </Button>
       </header>
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-300 border-t-emerald-600" />
-        </div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={parts}
-          searchKey="partNumber"
-          searchPlaceholder="Search by part number..."
-        />
-      )}
+      <div className="flex-1 p-6 overflow-auto">
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-300 border-t-emerald-600" />
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={parts}
+            searchKey="partNumber"
+            searchPlaceholder="Search by part number..."
+          />
+        )}
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
@@ -194,7 +186,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div>
-              <label htmlFor="partNumber" className="block text-sm font-medium text-slate-300 mb-1">
+              <label htmlFor="partNumber" className="block text-sm font-medium text-slate-600 mb-1">
                 Part Number
               </label>
               <Input
@@ -207,7 +199,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
               />
             </div>
             <div>
-              <label htmlFor="partName" className="block text-sm font-medium text-slate-300 mb-1">
+              <label htmlFor="partName" className="block text-sm font-medium text-slate-600 mb-1">
                 Part Name
               </label>
               <Input
@@ -221,7 +213,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
             <div>
               <label
                 htmlFor="productLine"
-                className="block text-sm font-medium text-slate-300 mb-1"
+                className="block text-sm font-medium text-slate-600 mb-1"
               >
                 Product Line (optional)
               </label>
@@ -233,7 +225,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
               />
             </div>
             {saveMutation.isError && (
-              <p className="text-red-400 text-sm">{(saveMutation.error as Error).message}</p>
+              <p className="text-red-500 text-sm">{(saveMutation.error as Error).message}</p>
             )}
             <div className="flex justify-end gap-3 pt-4">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
@@ -246,6 +238,6 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
