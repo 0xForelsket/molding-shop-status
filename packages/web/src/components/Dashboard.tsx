@@ -1,10 +1,11 @@
 // packages/web/src/components/Dashboard.tsx
 
-import { ClipboardList, LogOut, Package, Upload } from 'lucide-react';
+import { ClipboardList, LayoutGrid, LogOut, MapPin, Package, Table, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { useMachines, useSummary } from '../hooks/useMachines';
 import { useAuth } from '../lib/auth';
 import { EditableTable } from './EditableTable';
+import { FloorLayoutDashboard } from './FloorLayoutDashboard';
 import { MachineCard } from './MachineCard';
 import { OrderImport } from './OrderImport';
 import { SummaryBar } from './SummaryBar';
@@ -13,7 +14,7 @@ import { Button } from './ui/button';
 type Page = 'dashboard' | 'parts' | 'orders';
 
 export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) {
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'floor'>('grid');
   const [showImport, setShowImport] = useState(false);
   const { data: machines = [], isLoading, error, refetch } = useMachines();
   const { data: summary } = useSummary();
@@ -52,15 +53,25 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) 
             <button
               type="button"
               onClick={() => setViewMode('grid')}
-              className={`px-3 py-1 rounded transition-colors ${viewMode === 'grid' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}
+              className={`px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 ${viewMode === 'grid' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}
             >
+              <LayoutGrid className="h-4 w-4" />
               Grid
             </button>
             <button
               type="button"
-              onClick={() => setViewMode('table')}
-              className={`px-3 py-1 rounded transition-colors ${viewMode === 'table' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}
+              onClick={() => setViewMode('floor')}
+              className={`px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 ${viewMode === 'floor' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}
             >
+              <MapPin className="h-4 w-4" />
+              Floor
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 ${viewMode === 'table' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}
+            >
+              <Table className="h-4 w-4" />
               Manage
             </button>
           </div>
@@ -103,6 +114,8 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) 
             <MachineCard key={machine.machineId} machine={machine} />
           ))}
         </div>
+      ) : viewMode === 'floor' ? (
+        <FloorLayoutDashboard />
       ) : (
         <EditableTable machines={machines} onRefresh={refetch} />
       )}

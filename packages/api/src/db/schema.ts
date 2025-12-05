@@ -32,6 +32,10 @@ export const machines = pgTable('machines', {
   injectionWeight: real('injection_weight'),
   is2K: boolean('is_2k').default(false),
 
+  // Floor Layout Position
+  floorRow: text('floor_row'), // 'top', 'middle', 'bottom'
+  floorPosition: integer('floor_position'), // order within row (1=left)
+
   lastSeen: timestamp('last_seen'),
   createdAt: timestamp('created_at').defaultNow(),
 });
