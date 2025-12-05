@@ -2,14 +2,15 @@
 // Admin page for managing production orders
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ColumnDef } from '@tanstack/react-table';
 import { ArrowLeft, Pencil, Plus, Trash2, Upload } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getAuthHeader } from '../lib/auth';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
+import { DataTable } from './ui/data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 
 interface Part {
   partNumber: string;
@@ -29,6 +30,17 @@ interface Order {
   machines: { machineName: string } | null;
 }
 
+// Flatten order for DataTable
+interface FlatOrder {
+  orderNumber: string;
+  partNumber: string;
+  partName: string | null;
+  quantityRequired: number;
+  quantityCompleted: number;
+  status: string;
+  machineName: string | null;
+}
+
 async function fetchOrders(): Promise<Order[]> {
   const res = await fetch('/api/orders');
   if (!res.ok) throw new Error('Failed to fetch orders');
@@ -43,12 +55,30 @@ async function fetchParts(): Promise<Part[]> {
 
 export function OrdersPage({ onBack }: { onBack: () => void }) {
   const queryClient = useQueryClient();
-  const { data: orders = [], isLoading } = useQuery({ queryKey: ['orders'], queryFn: fetchOrders });
+  const { data: ordersRaw = [], isLoading } = useQuery({
+    queryKey: ['orders'],
+    queryFn: fetchOrders,
+  });
   const { data: parts = [] } = useQuery({ queryKey: ['parts'], queryFn: fetchParts });
+
+  // Flatten orders for the table
+  const orders: FlatOrder[] = useMemo(
+    () =>
+      ordersRaw.map((o) => ({
+        orderNumber: o.production_orders.orderNumber,
+        partNumber: o.production_orders.partNumber,
+        partName: o.parts?.partName ?? null,
+        quantityRequired: o.production_orders.quantityRequired,
+        quantityCompleted: o.production_orders.quantityCompleted,
+        status: o.production_orders.status,
+        machineName: o.machines?.machineName ?? null,
+      })),
+    [ordersRaw]
+  );
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<Order['production_orders'] | null>(null);
+  const [editingOrder, setEditingOrder] = useState<FlatOrder | null>(null);
   const [form, setForm] = useState({
     orderNumber: '',
     partNumber: '',
@@ -56,6 +86,7 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
     status: 'pending',
   });
   const [importText, setImportText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
     if (editingOrder) {
@@ -169,6 +200,120 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const columns = useMemo<ColumnDef<FlatOrder>[]>(
+    () => [
+      {
+        accessorKey: 'orderNumber',
+        header: 'Order #',
+        cell: ({ row }) => <span className="font-mono">{row.getValue('orderNumber')}</span>,
+      },
+      {
+        accessorKey: 'partNumber',
+        header: 'Part #',
+        cell: ({ row }) => (
+          <div>
+            <span className="font-mono text-sm">{row.getValue('partNumber')}</span>
+            {row.original.partName && (
+              <span className="block text-xs text-slate-400">{row.original.partName}</span>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'quantityRequired',
+        header: 'Quantity',
+        cell: ({ row }) => (
+          <span className="font-mono">
+            {row.original.quantityCompleted.toLocaleString()} /{' '}
+            {row.original.quantityRequired.toLocaleString()}
+          </span>
+        ),
+      },
+      {
+        id: 'progress',
+        header: 'Progress',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const progress =
+            row.original.quantityRequired > 0
+              ? Math.round((row.original.quantityCompleted / row.original.quantityRequired) * 100)
+              : 0;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-20 bg-slate-700 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full"
+                  style={{ width: `${Math.min(progress, 100)}%` }}
+                />
+              </div>
+              <span className="text-xs text-slate-400 w-8">{progress}%</span>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        filterFn: (row, id, filterValue) => {
+          if (filterValue === 'all') return true;
+          return row.getValue(id) === filterValue;
+        },
+        cell: ({ row }) => (
+          <span
+            className={cn(
+              'px-2 py-0.5 rounded text-xs font-medium',
+              statusColor(row.getValue('status'))
+            )}
+          >
+            {row.getValue('status')}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'machineName',
+        header: 'Machine',
+        cell: ({ row }) => (
+          <span className="text-slate-400">{row.getValue('machineName') || '-'}</span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: '',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex gap-1 justify-end">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                setEditingOrder(row.original);
+                setDialogOpen(true);
+              }}
+              className="h-8 w-8 text-slate-400 hover:text-white"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => handleDelete(row.original.orderNumber)}
+              className="h-8 w-8 text-slate-400 hover:text-red-400"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
+  // Filter orders by status
+  const filteredOrders = useMemo(
+    () => (statusFilter === 'all' ? orders : orders.filter((o) => o.status === statusFilter)),
+    [orders, statusFilter]
+  );
+
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
       <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-700">
@@ -177,7 +322,6 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-2xl font-semibold">Production Orders</h1>
-          <span className="text-slate-400 text-sm">{orders.length} orders</span>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
@@ -196,98 +340,41 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
         </div>
       </header>
 
+      {/* Status Filter Tabs */}
+      <div className="flex gap-2 mb-4">
+        {['all', 'pending', 'assigned', 'running', 'completed', 'cancelled'].map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStatusFilter(s)}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+              statusFilter === s
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            )}
+          >
+            {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+            {s !== 'all' && (
+              <span className="ml-1.5 text-xs opacity-70">
+                ({orders.filter((o) => o.status === s).length})
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500" />
         </div>
       ) : (
-        <div className="bg-slate-800 rounded-xl overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-800/50 hover:bg-slate-800/50">
-                <TableHead>Order #</TableHead>
-                <TableHead>Part</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Machine</TableHead>
-                <TableHead className="w-24" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orders.map((order) => {
-                const o = order.production_orders;
-                const progress =
-                  o.quantityRequired > 0
-                    ? Math.round((o.quantityCompleted / o.quantityRequired) * 100)
-                    : 0;
-                return (
-                  <TableRow key={o.orderNumber}>
-                    <TableCell className="font-mono">{o.orderNumber}</TableCell>
-                    <TableCell>
-                      <div>
-                        <span className="font-mono text-sm">{o.partNumber}</span>
-                        {order.parts && (
-                          <span className="block text-xs text-slate-400">
-                            {order.parts.partName}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono">
-                      {o.quantityCompleted.toLocaleString()} / {o.quantityRequired.toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="w-24 bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-blue-500 h-2 rounded-full"
-                          style={{ width: `${Math.min(progress, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-slate-400">{progress}%</span>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={cn(
-                          'px-2 py-0.5 rounded text-xs font-medium',
-                          statusColor(o.status)
-                        )}
-                      >
-                        {o.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-slate-400">
-                      {order.machines?.machineName || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingOrder(o);
-                            setDialogOpen(true);
-                          }}
-                          className="h-8 w-8 text-slate-400 hover:text-white"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleDelete(o.orderNumber)}
-                          className="h-8 w-8 text-slate-400 hover:text-red-400"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={filteredOrders}
+          searchKey="orderNumber"
+          searchPlaceholder="Search by order number..."
+        />
       )}
 
       {/* Add/Edit Dialog */}
