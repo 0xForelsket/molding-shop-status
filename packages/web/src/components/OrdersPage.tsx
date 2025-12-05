@@ -390,66 +390,77 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
             {!editingOrder && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label
+                    htmlFor="orderNumber"
+                    className="block text-sm font-medium text-slate-300 mb-1"
+                  >
                     Order Number
-                    <Input
-                      value={form.orderNumber}
-                      onChange={(e) => setForm((f) => ({ ...f, orderNumber: e.target.value }))}
-                      placeholder="e.g., 1354981"
-                      required
-                      className="mt-1"
-                    />
                   </label>
+                  <Input
+                    id="orderNumber"
+                    value={form.orderNumber}
+                    onChange={(e) => setForm((f) => ({ ...f, orderNumber: e.target.value }))}
+                    placeholder="e.g., 1354981"
+                    required
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label
+                    htmlFor="partNumber"
+                    className="block text-sm font-medium text-slate-300 mb-1"
+                  >
                     Part
-                    <select
-                      value={form.partNumber}
-                      onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
-                      className="mt-1 w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
-                      required
-                    >
-                      <option value="">Select part...</option>
-                      {parts.map((p) => (
-                        <option key={p.partNumber} value={p.partNumber}>
-                          {p.partNumber} - {p.partName}
-                        </option>
-                      ))}
-                    </select>
                   </label>
+                  <select
+                    id="partNumber"
+                    value={form.partNumber}
+                    onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
+                    className="w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
+                    required
+                  >
+                    <option value="">Select part...</option>
+                    {parts.map((p) => (
+                      <option key={p.partNumber} value={p.partNumber}>
+                        {p.partNumber} - {p.partName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label
+                    htmlFor="quantityRequired"
+                    className="block text-sm font-medium text-slate-300 mb-1"
+                  >
                     Quantity Required
-                    <Input
-                      type="number"
-                      value={form.quantityRequired}
-                      onChange={(e) => setForm((f) => ({ ...f, quantityRequired: e.target.value }))}
-                      placeholder="e.g., 5000"
-                      required
-                      className="mt-1"
-                    />
                   </label>
+                  <Input
+                    id="quantityRequired"
+                    type="number"
+                    value={form.quantityRequired}
+                    onChange={(e) => setForm((f) => ({ ...f, quantityRequired: e.target.value }))}
+                    placeholder="e.g., 5000"
+                    required
+                  />
                 </div>
               </>
             )}
             {editingOrder && (
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
+                <label htmlFor="status" className="block text-sm font-medium text-slate-300 mb-1">
                   Status
-                  <select
-                    value={form.status}
-                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                    className="mt-1 w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="assigned">Assigned</option>
-                    <option value="running">Running</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
                 </label>
+                <select
+                  id="status"
+                  value={form.status}
+                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+                  className="w-full h-9 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="running">Running</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
               </div>
             )}
             {saveMutation.isError && (

@@ -14,19 +14,31 @@ interface DialogProps {
 export function Dialog({ open, onOpenChange, children }: DialogProps) {
   if (!open) return null;
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onOpenChange(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-50" onKeyDown={handleKeyDown}>
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm"
         onClick={() => onOpenChange(false)}
+        onKeyDown={(e) => e.key === 'Enter' && onOpenChange(false)}
+        role="button"
+        tabIndex={0}
+        aria-label="Close dialog"
       />
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <div
-          className="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 max-h-[90vh] overflow-auto"
+        <dialog
+          open
+          className="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 max-h-[90vh] overflow-auto m-0"
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
           {children}
-        </div>
+        </dialog>
       </div>
     </div>
   );

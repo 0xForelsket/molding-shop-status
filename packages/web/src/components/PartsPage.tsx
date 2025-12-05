@@ -189,40 +189,43 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label htmlFor="partNumber" className="block text-sm font-medium text-slate-300 mb-1">
                 Part Number
-                <Input
-                  value={form.partNumber}
-                  onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
-                  placeholder="e.g., 141929-00"
-                  disabled={!!editingPart}
-                  required
-                  className="mt-1"
-                />
               </label>
+              <Input
+                id="partNumber"
+                value={form.partNumber}
+                onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
+                placeholder="e.g., 141929-00"
+                disabled={!!editingPart}
+                required
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label htmlFor="partName" className="block text-sm font-medium text-slate-300 mb-1">
                 Part Name
-                <Input
-                  value={form.partName}
-                  onChange={(e) => setForm((f) => ({ ...f, partName: e.target.value }))}
-                  placeholder="e.g., Lower Housing USB"
-                  required
-                  className="mt-1"
-                />
               </label>
+              <Input
+                id="partName"
+                value={form.partName}
+                onChange={(e) => setForm((f) => ({ ...f, partName: e.target.value }))}
+                placeholder="e.g., Lower Housing USB"
+                required
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
+              <label
+                htmlFor="productLine"
+                className="block text-sm font-medium text-slate-300 mb-1"
+              >
                 Product Line (optional)
-                <Input
-                  value={form.productLine}
-                  onChange={(e) => setForm((f) => ({ ...f, productLine: e.target.value }))}
-                  placeholder="e.g., Wave 1.1"
-                  className="mt-1"
-                />
               </label>
+              <Input
+                id="productLine"
+                value={form.productLine}
+                onChange={(e) => setForm((f) => ({ ...f, productLine: e.target.value }))}
+                placeholder="e.g., Wave 1.1"
+              />
             </div>
             {saveMutation.isError && (
               <p className="text-red-400 text-sm">{(saveMutation.error as Error).message}</p>
