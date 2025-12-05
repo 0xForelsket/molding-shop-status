@@ -3,6 +3,16 @@
 **Theme**: Modern German Industrial Light
 **Philosophy**: Functional, Data-Dense, High-Contrast, "No-Nonsense" Engineering.
 
+## Reference Images
+See `docs/inspiration-ui-1.png` and `docs/inspiration-ui-2.png` for the target aesthetic.
+
+Key elements from inspiration:
+- Left sidebar navigation with icons
+- Summary bar with colored stat boxes (Total, Running, Idle, Fault, Offline)
+- Dense grid of machine cards showing ID, brand, status, part, cycle time, OEE
+- Right-side details panel for selected machine (fault info, signals, logs)
+- View toggle buttons (Grid / Floor / Table)
+
 ## 1. Core Palette
 The UI primarily uses a stark, clean light mode.
 
