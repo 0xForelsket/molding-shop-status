@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAuthHeader } from '../lib/auth';
 import { Button } from './ui/button';
 import { DataTable } from './ui/data-table';
@@ -90,11 +90,14 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
     saveMutation.mutate(form);
   };
 
-  const handleDelete = (partNumber: string) => {
-    if (confirm(`Delete part ${partNumber}?`)) {
-      deleteMutation.mutate(partNumber);
-    }
-  };
+  const handleDelete = useCallback(
+    (partNumber: string) => {
+      if (confirm(`Delete part ${partNumber}?`)) {
+        deleteMutation.mutate(partNumber);
+      }
+    },
+    [deleteMutation]
+  );
 
   const columns = useMemo<ColumnDef<Part>[]>(
     () => [
@@ -143,7 +146,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
         ),
       },
     ],
-    []
+    [handleDelete]
   );
 
   return (

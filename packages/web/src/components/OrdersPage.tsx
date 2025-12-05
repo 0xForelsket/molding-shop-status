@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ArrowLeft, Pencil, Plus, Trash2, Upload } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAuthHeader } from '../lib/auth';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -177,13 +177,16 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
     saveMutation.mutate(form);
   };
 
-  const handleDelete = (orderNumber: string) => {
-    if (confirm(`Delete order ${orderNumber}?`)) {
-      deleteMutation.mutate(orderNumber);
-    }
-  };
+  const handleDelete = useCallback(
+    (orderNumber: string) => {
+      if (confirm(`Delete order ${orderNumber}?`)) {
+        deleteMutation.mutate(orderNumber);
+      }
+    },
+    [deleteMutation]
+  );
 
-  const statusColor = (status: string) => {
+  const statusColor = useCallback((status: string) => {
     switch (status) {
       case 'pending':
         return 'bg-slate-700 text-slate-300';
@@ -198,7 +201,7 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
       default:
         return 'bg-slate-700 text-slate-300';
     }
-  };
+  }, []);
 
   const columns = useMemo<ColumnDef<FlatOrder>[]>(
     () => [
@@ -305,7 +308,7 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
         ),
       },
     ],
-    []
+    [handleDelete, statusColor]
   );
 
   // Filter orders by status

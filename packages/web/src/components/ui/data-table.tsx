@@ -94,11 +94,19 @@ export function DataTable<TData, TValue>({
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
+                    tabIndex={header.column.getCanSort() ? 0 : undefined}
+                    role={header.column.getCanSort() ? 'button' : undefined}
                     className={cn(
                       'text-left text-slate-400 font-medium px-4 py-3',
                       header.column.getCanSort() && 'cursor-pointer select-none hover:text-white'
                     )}
                     onClick={header.column.getToggleSortingHandler()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        header.column.getToggleSortingHandler()?.(e);
+                      }
+                    }}
                   >
                     <div className="flex items-center gap-2">
                       {header.isPlaceholder
