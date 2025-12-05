@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { downtimeReasons, machineParts, parts, productLines, shifts } from '../db/schema';
+import { downtimeReasons, machineParts, machines, parts, productLines, shifts } from '../db/schema';
 import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const referenceRoutes = new Hono();
@@ -15,7 +15,36 @@ export const referenceRoutes = new Hono();
 
 referenceRoutes.get('/parts', async (c) => {
   const allParts = await db.select().from(parts).orderBy(parts.partNumber);
-  return c.json(allParts);
+
+  // Get compatibility mappings with machine names
+  const mappings = await db
+    .select({
+      partNumber: machineParts.partNumber,
+      machineName: machines.machineName,
+    })
+    .from(machineParts)
+    .leftJoin(machines, eq(machineParts.machineId, machines.machineId));
+
+  // internal map for faster lookup
+  const compatibilityMap = new Map<string, Set<string>>();
+  for (const m of mappings) {
+    if (m.partNumber && m.machineName) {
+      if (!compatibilityMap.has(m.partNumber)) {
+        compatibilityMap.set(m.partNumber, new Set());
+      }
+      compatibilityMap.get(m.partNumber)?.add(m.machineName);
+    }
+  }
+
+  // Merge
+  const result = allParts.map((p) => ({
+    ...p,
+    compatibleMachines: compatibilityMap.has(p.partNumber)
+      ? Array.from(compatibilityMap.get(p.partNumber)!).sort()
+      : [],
+  }));
+
+  return c.json(result);
 });
 
 referenceRoutes.get('/parts/:partNumber', async (c) => {

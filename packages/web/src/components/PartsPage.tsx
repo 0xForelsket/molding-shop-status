@@ -15,6 +15,7 @@ interface Part {
   partNumber: string;
   partName: string;
   productLine: string | null;
+  compatibleMachines?: string[];
 }
 
 async function fetchParts(): Promise<Part[]> {
@@ -116,6 +117,27 @@ export function PartsPage() {
         cell: ({ row }) => (
           <span className="text-slate-500">{row.getValue('productLine') || '-'}</span>
         ),
+      },
+      {
+        accessorKey: 'compatibleMachines',
+        header: 'Compatible Machines',
+        cell: ({ row }) => {
+          const machines = row.original.compatibleMachines || [];
+          if (machines.length === 0)
+            return <span className="text-slate-400 italic text-xs">None</span>;
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[300px]">
+              {machines.map((m) => (
+                <span
+                  key={m}
+                  className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-xs border border-slate-200 whitespace-nowrap"
+                >
+                  {m}
+                </span>
+              ))}
+            </div>
+          );
+        },
       },
       {
         id: 'actions',

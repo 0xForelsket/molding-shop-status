@@ -5,7 +5,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { machines, parts, productionOrders } from '../db/schema';
+import { machineParts, machines, parts, productionOrders } from '../db/schema';
 import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const orderRoutes = new Hono();
@@ -47,7 +47,18 @@ orderRoutes.get('/available', async (c) => {
     byPart.get(order.partNumber)?.orders.push(order);
   }
 
-  // Return both flat list and grouped view
+  // Fetch compatibility mappings
+  const mappings = await db.select().from(machineParts);
+  const compatibility: Record<string, number[]> = {};
+
+  for (const m of mappings) {
+    if (!compatibility[m.partNumber]) {
+      compatibility[m.partNumber] = [];
+    }
+    compatibility[m.partNumber].push(m.machineId);
+  }
+
+  // Return flat list, grouped view, and compatibility map
   return c.json({
     orders,
     byPart: Array.from(byPart.entries()).map(([partNumber, data]) => ({
@@ -56,6 +67,7 @@ orderRoutes.get('/available', async (c) => {
       lowestOrder: data.orders[0].orderNumber, // First order (lowest) for this part
       orderCount: data.orders.length,
     })),
+    compatibility,
   });
 });
 

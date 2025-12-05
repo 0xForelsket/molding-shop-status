@@ -24,6 +24,7 @@ interface PartWithOrders {
 interface AvailableData {
   orders: AvailableOrder[];
   byPart: PartWithOrders[];
+  compatibility: Record<string, number[]>;
 }
 
 // Status badge styles - solid colors
@@ -118,11 +119,15 @@ const MachineRow = memo(function MachineRow({
                 className="h-8 text-xs flex-1 rounded border border-slate-300 bg-white px-2 text-slate-800"
               >
                 <option value="">Clear assignment</option>
-                {availableData?.orders.map((o) => (
-                  <option key={o.orderNumber} value={o.orderNumber}>
-                    {o.orderNumber} → {o.partNumber}
-                  </option>
-                ))}
+                {availableData?.orders
+                  .filter(
+                    (o) => !!availableData.compatibility[o.partNumber]?.includes(machine.machineId)
+                  )
+                  .map((o) => (
+                    <option key={o.orderNumber} value={o.orderNumber}>
+                      {o.orderNumber} → {o.partNumber}
+                    </option>
+                  ))}
               </select>
             ) : (
               <select
@@ -131,11 +136,15 @@ const MachineRow = memo(function MachineRow({
                 className="h-8 text-xs flex-1 rounded border border-slate-300 bg-white px-2 text-slate-800"
               >
                 <option value="">Select part...</option>
-                {availableData?.byPart.map((p) => (
-                  <option key={p.partNumber} value={p.partNumber}>
-                    {p.partNumber} - {p.partName} ({p.orderCount} orders)
-                  </option>
-                ))}
+                {availableData?.byPart
+                  .filter(
+                    (p) => !!availableData.compatibility[p.partNumber]?.includes(machine.machineId)
+                  )
+                  .map((p) => (
+                    <option key={p.partNumber} value={p.partNumber}>
+                      {p.partNumber} - {p.partName} ({p.orderCount} orders)
+                    </option>
+                  ))}
               </select>
             )}
 
