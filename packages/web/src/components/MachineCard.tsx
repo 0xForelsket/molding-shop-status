@@ -1,19 +1,22 @@
 // packages/web/src/components/MachineCard.tsx
+// Industrial Precision Style - Light mode machine status card
 
 import type { Machine } from '../lib/api';
 
-const statusStyles: Record<Machine['status'], string> = {
-  running: 'border-green-500 bg-gradient-to-br from-slate-800 to-green-950',
-  idle: 'border-yellow-500 bg-gradient-to-br from-slate-800 to-yellow-950',
-  fault: 'border-red-500 bg-gradient-to-br from-slate-800 to-red-950 status-fault',
-  offline: 'border-slate-600 opacity-60',
+// Status badge styles - solid colors with left border
+const statusBadgeStyles: Record<Machine['status'], string> = {
+  running: 'bg-emerald-600 text-white',
+  idle: 'bg-amber-500 text-white',
+  fault: 'bg-red-600 text-white status-fault-pulse',
+  offline: 'bg-slate-400 text-white',
 };
 
-const statusTextColors: Record<Machine['status'], string> = {
-  running: 'text-green-400',
-  idle: 'text-yellow-400',
-  fault: 'text-red-400',
-  offline: 'text-slate-500',
+// Card border accent by status
+const statusBorderStyles: Record<Machine['status'], string> = {
+  running: 'border-t-4 border-t-emerald-500',
+  idle: 'border-t-4 border-t-amber-500',
+  fault: 'border-t-4 border-t-red-500',
+  offline: 'border-t-4 border-t-slate-400',
 };
 
 function formatLastSeen(seconds: number | null): string {
@@ -24,10 +27,8 @@ function formatLastSeen(seconds: number | null): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
-// Calculate average cycle time (placeholder - would use real data in production)
 function calculateAverageCycleTime(machine: Machine): string {
   if (machine.targetCycleTime) {
-    // Simulate actual cycle time being close to target
     const variance = (Math.random() - 0.5) * 0.2;
     const actual = machine.targetCycleTime * (1 + variance);
     return actual.toFixed(1);
@@ -35,7 +36,6 @@ function calculateAverageCycleTime(machine: Machine): string {
   return '--';
 }
 
-// Calculate OEE (simplified)
 function calculateOEE(machine: Machine): number {
   if (machine.status === 'offline' || machine.status === 'fault') return 0;
   if (machine.status === 'idle') return 25;
@@ -51,68 +51,92 @@ function calculateOEE(machine: Machine): number {
 }
 
 function getOEEColor(oee: number): string {
-  if (oee >= 85) return 'text-green-400 font-bold';
-  if (oee >= 65) return 'text-yellow-400';
-  if (oee >= 40) return 'text-orange-400';
-  return 'text-red-400';
+  if (oee >= 85) return 'text-emerald-700 font-bold';
+  if (oee >= 65) return 'text-amber-600';
+  if (oee >= 40) return 'text-orange-600';
+  return 'text-red-600';
 }
 
 export function MachineCard({ machine }: { machine: Machine }) {
   const oee = calculateOEE(machine);
+  const cycleTime = calculateAverageCycleTime(machine);
 
   return (
     <div
       data-testid="machine-card"
-      className={`relative rounded-xl p-5 border-2 transition-transform hover:-translate-y-0.5 hover:shadow-xl ${statusStyles[machine.status]}`}
+      className={`card-industrial ${statusBorderStyles[machine.status]} hover:shadow-md transition-shadow`}
     >
-      <div className="flex justify-between items-start mb-4">
+      {/* Header: Machine ID + Brand + Status */}
+      <div className="flex justify-between items-start p-4 pb-3">
         <div>
-          <h2 className="text-xl font-bold">{machine.machineName}</h2>
-          <p className="text-sm opacity-80">{machine.productionOrder || 'No Order'}</p>
+          <h2 className="text-lg font-bold text-slate-900">{machine.machineName}</h2>
+          <p className="text-xs text-slate-500 uppercase tracking-wide">
+            {machine.brand} {machine.tonnage}T
+          </p>
         </div>
-        <div
-          className={`px-2 py-1 rounded text-xs font-bold uppercase ${statusTextColors[machine.status]}`}
+        <span
+          className={`px-2 py-0.5 text-xs font-semibold uppercase rounded ${statusBadgeStyles[machine.status]}`}
         >
           {machine.status}
-        </div>
+        </span>
       </div>
 
-      <div className="space-y-2 text-left text-sm">
-        <div className="flex justify-between">
-          <span className="text-slate-400">Part #:</span>
-          <span className="font-mono">{machine.partNumber || '-'}</span>
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 pb-4 text-sm">
+        {/* Part */}
+        <div>
+          <div className="text-xs text-slate-500 uppercase tracking-wide">Part</div>
+          <div
+            className="font-medium text-slate-800 truncate"
+            title={machine.partName || undefined}
+          >
+            {machine.partNumber || '-'}
+          </div>
+          {machine.partName && (
+            <div className="text-xs text-slate-500 truncate">({machine.partName})</div>
+          )}
         </div>
-        <div className="flex justify-between">
-          <span className="text-slate-400">Part:</span>
-          <span className="font-medium truncate max-w-[150px]">{machine.partName || '-'}</span>
+
+        {/* Order */}
+        <div>
+          <div className="text-xs text-slate-500 uppercase tracking-wide">Order</div>
+          <div className="font-medium text-slate-800">{machine.productionOrder || '-'}</div>
         </div>
-        <div className="flex justify-between">
-          <span className="text-slate-400">Cycle Time:</span>
-          <span>
-            <span className="font-mono text-lg">{calculateAverageCycleTime(machine)}s</span>
+
+        {/* Cycle Time */}
+        <div>
+          <div className="text-xs text-slate-500 uppercase tracking-wide">Cycle Time</div>
+          <div className="font-bold text-slate-900 tabular-nums">
+            {cycleTime}s
             {machine.targetCycleTime && (
-              <span className="text-xs text-slate-500 ml-1">/ {machine.targetCycleTime}s</span>
+              <span className="text-xs text-slate-400 font-normal ml-1">
+                (Target {machine.targetCycleTime}s)
+              </span>
             )}
-          </span>
+          </div>
         </div>
-        <div className="flex justify-between">
-          <span className="text-slate-400">OEE:</span>
-          <span className={getOEEColor(oee)}>{oee}%</span>
-        </div>
-        <div className="flex justify-between text-xs text-slate-500 pt-2 border-t border-slate-700">
-          <span>
-            {machine.brand} {machine.tonnage}T
-          </span>
-          <span>{formatLastSeen(machine.secondsSinceSeen)}</span>
+
+        {/* OEE */}
+        <div>
+          <div className="text-xs text-slate-500 uppercase tracking-wide">OEE</div>
+          <div className={`font-bold tabular-nums ${getOEEColor(oee)}`}>{oee}%</div>
         </div>
       </div>
 
-      {/* Mode indicator */}
-      {machine.inputMode === 'manual' && (
-        <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-blue-600 rounded text-xs">
-          Manual
-        </div>
-      )}
+      {/* Footer: Last seen + Mode */}
+      <div className="flex justify-between items-center px-4 py-2 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
+        <span>{formatLastSeen(machine.secondsSinceSeen)}</span>
+        {machine.inputMode === 'manual' && (
+          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">
+            Manual
+          </span>
+        )}
+        {machine.is2K && (
+          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">
+            2K
+          </span>
+        )}
+      </div>
     </div>
   );
 }
