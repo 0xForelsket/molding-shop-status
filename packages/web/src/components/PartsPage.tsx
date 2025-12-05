@@ -130,7 +130,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
                 setEditingPart(row.original);
                 setDialogOpen(true);
               }}
-              className="h-8 w-8 text-slate-400 hover:text-white"
+              className="h-8 w-8 text-slate-400 hover:text-slate-700"
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -138,7 +138,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
               size="icon"
               variant="ghost"
               onClick={() => handleDelete(row.original.partNumber)}
-              className="h-8 w-8 text-slate-400 hover:text-red-400"
+              className="h-8 w-8 text-slate-400 hover:text-red-600"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -150,13 +150,18 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
   );
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
-      <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-700">
+    <div className="min-h-screen p-6">
+      <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onBack}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            className="text-slate-600 hover:text-slate-900"
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-semibold">Parts Catalog</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Parts Catalog</h1>
         </div>
         <Button
           onClick={() => {
@@ -171,7 +176,7 @@ export function PartsPage({ onBack }: { onBack: () => void }) {
 
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-300 border-t-emerald-600" />
         </div>
       ) : (
         <DataTable

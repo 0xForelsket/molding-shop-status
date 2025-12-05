@@ -189,17 +189,17 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
   const statusColor = useCallback((status: string) => {
     switch (status) {
       case 'pending':
-        return 'bg-slate-700 text-slate-300';
+        return 'bg-slate-200 text-slate-700';
       case 'assigned':
-        return 'bg-blue-900/50 text-blue-400';
+        return 'bg-blue-100 text-blue-700';
       case 'running':
-        return 'bg-green-900/50 text-green-400';
+        return 'bg-emerald-100 text-emerald-700';
       case 'completed':
-        return 'bg-emerald-900/50 text-emerald-400';
+        return 'bg-green-100 text-green-700';
       case 'cancelled':
-        return 'bg-red-900/50 text-red-400';
+        return 'bg-red-100 text-red-700';
       default:
-        return 'bg-slate-700 text-slate-300';
+        return 'bg-slate-200 text-slate-700';
     }
   }, []);
 
@@ -243,13 +243,13 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
               : 0;
           return (
             <div className="flex items-center gap-2">
-              <div className="w-20 bg-slate-700 rounded-full h-2">
+              <div className="w-20 bg-slate-200 rounded-full h-2">
                 <div
-                  className="bg-blue-500 h-2 rounded-full"
+                  className="bg-emerald-500 h-2 rounded-full"
                   style={{ width: `${Math.min(progress, 100)}%` }}
                 />
               </div>
-              <span className="text-xs text-slate-400 w-8">{progress}%</span>
+              <span className="text-xs text-slate-500 w-8">{progress}%</span>
             </div>
           );
         },
@@ -292,7 +292,7 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
                 setEditingOrder(row.original);
                 setDialogOpen(true);
               }}
-              className="h-8 w-8 text-slate-400 hover:text-white"
+              className="h-8 w-8 text-slate-400 hover:text-slate-700"
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -300,7 +300,7 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
               size="icon"
               variant="ghost"
               onClick={() => handleDelete(row.original.orderNumber)}
-              className="h-8 w-8 text-slate-400 hover:text-red-400"
+              className="h-8 w-8 text-slate-400 hover:text-red-600"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -318,13 +318,18 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
   );
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
-      <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-700">
+    <div className="min-h-screen p-6">
+      <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onBack}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            className="text-slate-600 hover:text-slate-900"
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-semibold">Production Orders</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Production Orders</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
@@ -351,10 +356,10 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
             type="button"
             onClick={() => setStatusFilter(s)}
             className={cn(
-              'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+              'px-3 py-1.5 rounded text-sm font-medium transition-colors border',
               statusFilter === s
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                ? 'bg-white border-slate-300 text-slate-900 shadow-sm'
+                : 'bg-slate-100 border-transparent text-slate-600 hover:bg-slate-200'
             )}
           >
             {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
@@ -369,7 +374,7 @@ export function OrdersPage({ onBack }: { onBack: () => void }) {
 
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-300 border-t-emerald-600" />
         </div>
       ) : (
         <DataTable
