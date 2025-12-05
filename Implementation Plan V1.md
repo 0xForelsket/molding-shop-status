@@ -11,7 +11,7 @@
 | **Runtime** | Bun | Package manager, runtime, bundler |
 | **Backend** | Hono | Ultrafast web framework |
 | **ORM** | Drizzle | Type-safe database access |
-| **Database** | SQLite (via better-sqlite3) | Local persistence |
+| **Database** | PostgreSQL | Production database |
 | **Frontend** | React 19 + Vite | Modern SPA dashboard |
 | **Styling** | Tailwind CSS v4 | Utility-first CSS |
 | **UI Components** | Shadcn/ui | Accessible component library |
@@ -291,18 +291,19 @@ molding-shop-status/
 ```typescript
 // packages/api/src/db/schema.ts
 
-import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
-import { sql } from 'drizzle-orm';
+import { pgTable, serial, integer, text, boolean, real, timestamp } from 'drizzle-orm/pg-core';
 
-export const machines = sqliteTable('machines', {
-  machineId: integer('machine_id').primaryKey(),
+export const machines = pgTable('machines', {
+  machineId: serial('machine_id').primaryKey(),
   machineName: text('machine_name').notNull(),
-  status: text('status', { 
-    enum: ['running', 'idle', 'fault', 'offline'] 
-  }).default('offline').notNull(),
-  green: integer('green', { mode: 'boolean' }).default(false),
-  red: integer('red', { mode: 'boolean' }).default(false),
+  status: text('status').default('offline').notNull(),  // 'running', 'idle', 'fault', 'offline'
+  green: boolean('green').default(false),
+  red: boolean('red').default(false),
   cycleCount: integer('cycle_count').default(0),
+  
+  // Input Mode: 'auto' (ESP32 signal) or 'manual' (line leader input)
+  inputMode: text('input_mode').default('auto').notNull(),  // 'auto' or 'manual'
+  statusUpdatedBy: text('status_updated_by'),  // Name of person who updated (for manual mode)
   
   // Production Order Details (editable per shift)
   productionOrder: text('production_order'),
@@ -318,33 +319,33 @@ export const machines = sqliteTable('machines', {
   tonnage: integer('tonnage'),               // 60, 90, 120, 160, etc.
   screwDiameter: real('screw_diameter'),     // mm
   injectionWeight: real('injection_weight'), // grams
-  is2K: integer('is_2k', { mode: 'boolean' }).default(false),
+  is2K: boolean('is_2k').default(false),
   
-  lastSeen: text('last_seen'),
-  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  lastSeen: timestamp('last_seen'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const statusLogs = sqliteTable('status_logs', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const statusLogs = pgTable('status_logs', {
+  id: serial('id').primaryKey(),
   machineId: integer('machine_id')
     .references(() => machines.machineId)
     .notNull(),
   status: text('status').notNull(),
   cycleCount: integer('cycle_count'),
-  timestamp: text('timestamp').default(sql`CURRENT_TIMESTAMP`),
+  timestamp: timestamp('timestamp').defaultNow(),
 });
 
 // Parts Catalog - each part is unique
-export const parts = sqliteTable('parts', {
+export const parts = pgTable('parts', {
   partNumber: text('part_number').primaryKey(),  // e.g. "147933-00"
   partName: text('part_name').notNull(),         // e.g. "Lower Housing USB Dry"
   productLine: text('product_line'),             // e.g. "Wave 1.1", "Kepler BT-9"
-  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // Which parts can run on which machines (with machine-specific settings)
-export const machineParts = sqliteTable('machine_parts', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const machineParts = pgTable('machine_parts', {
+  id: serial('id').primaryKey(),
   machineId: integer('machine_id')
     .references(() => machines.machineId)
     .notNull(),
@@ -356,7 +357,7 @@ export const machineParts = sqliteTable('machine_parts', {
 });
 
 // Production Orders - what needs to be made
-export const productionOrders = sqliteTable('production_orders', {
+export const productionOrders = pgTable('production_orders', {
   orderNumber: text('order_number').primaryKey(),    // e.g. "1354981"
   partNumber: text('part_number')
     .references(() => parts.partNumber)
@@ -368,16 +369,14 @@ export const productionOrders = sqliteTable('production_orders', {
   machineId: integer('machine_id')
     .references(() => machines.machineId),
   
-  // Status
-  status: text('status', {
-    enum: ['pending', 'assigned', 'running', 'completed', 'cancelled']
-  }).default('pending'),
+  // Status: 'pending', 'assigned', 'running', 'completed', 'cancelled'
+  status: text('status').default('pending'),
   
   // Timestamps
-  dueDate: text('due_date'),
-  startedAt: text('started_at'),
-  completedAt: text('completed_at'),
-  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  dueDate: timestamp('due_date'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // Type exports for use throughout the app
@@ -392,12 +391,15 @@ export type ProductionOrder = typeof productionOrders.$inferSelect;
 ```typescript
 // packages/api/src/db/index.ts
 
-import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { Database } from 'bun:sqlite';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from './schema';
 
-const sqlite = new Database('machine_status.db');
-export const db = drizzle(sqlite, { schema });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export const db = drizzle(pool, { schema });
 ```
 
 ---
@@ -474,6 +476,68 @@ app.post('/api/machines/bulk-update', zValidator('json', z.array(machineConfigSc
   });
     
   return c.json({ success: true, count: updates.length });
+});
+
+// ============== MANUAL STATUS UPDATE (for line leaders) ==============
+
+const manualStatusSchema = z.object({
+  status: z.enum(['running', 'idle', 'fault', 'offline']),
+  updatedBy: z.string().min(1),  // Line leader name
+  cycleCount: z.number().optional(),
+});
+
+// Manual status update (only works if machine is in 'manual' mode)
+app.post('/api/machines/:id/manual-status', zValidator('json', manualStatusSchema), async (c) => {
+  const id = parseInt(c.req.param('id'));
+  const data = c.req.valid('json');
+  
+  // Check if machine is in manual mode
+  const machine = await db.select()
+    .from(machines)
+    .where(eq(machines.machineId, id))
+    .limit(1);
+  
+  if (machine.length === 0) {
+    return c.json({ error: 'Machine not found' }, 404);
+  }
+  
+  if (machine[0].inputMode !== 'manual') {
+    return c.json({ error: 'Machine is in auto mode. Change to manual mode first.' }, 400);
+  }
+  
+  await db.update(machines)
+    .set({
+      status: data.status,
+      statusUpdatedBy: data.updatedBy,
+      cycleCount: data.cycleCount ?? machine[0].cycleCount,
+      lastSeen: new Date().toISOString(),
+    })
+    .where(eq(machines.machineId, id));
+  
+  // Log the status change
+  await db.insert(statusLogs).values({
+    machineId: id,
+    status: data.status,
+    cycleCount: data.cycleCount ?? machine[0].cycleCount,
+  });
+  
+  return c.json({ success: true });
+});
+
+// Toggle input mode (auto <-> manual)
+app.post('/api/machines/:id/input-mode', async (c) => {
+  const id = parseInt(c.req.param('id'));
+  const { mode } = await c.req.json();
+  
+  if (!['auto', 'manual'].includes(mode)) {
+    return c.json({ error: 'Invalid mode' }, 400);
+  }
+  
+  await db.update(machines)
+    .set({ inputMode: mode })
+    .where(eq(machines.machineId, id));
+  
+  return c.json({ success: true, mode });
 });
 
 // ============== PRODUCTION ORDERS ==============
