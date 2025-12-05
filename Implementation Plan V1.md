@@ -304,11 +304,21 @@ export const machines = sqliteTable('machines', {
   red: integer('red', { mode: 'boolean' }).default(false),
   cycleCount: integer('cycle_count').default(0),
   
-  // Production Order Details
+  // Production Order Details (editable per shift)
   productionOrder: text('production_order'),
-  partName: text('part_name'),
+  partNumber: text('part_number'),           // e.g. MD-12345
+  partName: text('part_name'),               // e.g. "Comb Holder BT 9"
   targetCycleTime: real('target_cycle_time'), // seconds
   partsPerCycle: integer('parts_per_cycle').default(1),
+  
+  // Machine Specifications (static, for reference/filtering)
+  brand: text('brand'),                      // HAITIAN, ZHAFIR, ENGEL
+  model: text('model'),                      // MA1600II, VE2300III, etc.
+  serialNo: text('serial_no'),
+  tonnage: integer('tonnage'),               // 60, 90, 120, 160, etc.
+  screwDiameter: real('screw_diameter'),     // mm
+  injectionWeight: real('injection_weight'), // grams
+  is2K: integer('is_2k', { mode: 'boolean' }).default(false),
   
   lastSeen: text('last_seen'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
@@ -324,10 +334,59 @@ export const statusLogs = sqliteTable('status_logs', {
   timestamp: text('timestamp').default(sql`CURRENT_TIMESTAMP`),
 });
 
+// Parts Catalog - each part is unique
+export const parts = sqliteTable('parts', {
+  partNumber: text('part_number').primaryKey(),  // e.g. "147933-00"
+  partName: text('part_name').notNull(),         // e.g. "Lower Housing USB Dry"
+  productLine: text('product_line'),             // e.g. "Wave 1.1", "Kepler BT-9"
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Which parts can run on which machines (with machine-specific settings)
+export const machineParts = sqliteTable('machine_parts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  machineId: integer('machine_id')
+    .references(() => machines.machineId)
+    .notNull(),
+  partNumber: text('part_number')
+    .references(() => parts.partNumber)
+    .notNull(),
+  cavityPlan: integer('cavity_plan').default(1),     // how many parts per shot
+  targetCycleTime: real('target_cycle_time'),        // expected cycle time in seconds
+});
+
+// Production Orders - what needs to be made
+export const productionOrders = sqliteTable('production_orders', {
+  orderNumber: text('order_number').primaryKey(),    // e.g. "1354981"
+  partNumber: text('part_number')
+    .references(() => parts.partNumber)
+    .notNull(),
+  quantityRequired: integer('quantity_required').notNull(),
+  quantityCompleted: integer('quantity_completed').default(0),
+  
+  // Assignment
+  machineId: integer('machine_id')
+    .references(() => machines.machineId),
+  
+  // Status
+  status: text('status', {
+    enum: ['pending', 'assigned', 'running', 'completed', 'cancelled']
+  }).default('pending'),
+  
+  // Timestamps
+  dueDate: text('due_date'),
+  startedAt: text('started_at'),
+  completedAt: text('completed_at'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
 // Type exports for use throughout the app
 export type Machine = typeof machines.$inferSelect;
 export type NewMachine = typeof machines.$inferInsert;
 export type StatusLog = typeof statusLogs.$inferSelect;
+export type Part = typeof parts.$inferSelect;
+export type MachinePart = typeof machineParts.$inferSelect;
+export type ProductionOrder = typeof productionOrders.$inferSelect;
 ```
 
 ```typescript
@@ -415,6 +474,150 @@ app.post('/api/machines/bulk-update', zValidator('json', z.array(machineConfigSc
   });
     
   return c.json({ success: true, count: updates.length });
+});
+
+// ============== PRODUCTION ORDERS ==============
+
+const productionOrderSchema = z.object({
+  orderNumber: z.string().min(1),
+  partNumber: z.string().min(1),
+  quantityRequired: z.number().positive(),
+  dueDate: z.string().optional(),
+});
+
+// Get all production orders
+app.get('/api/orders', async (c) => {
+  const orders = await db
+    .select()
+    .from(productionOrders)
+    .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
+    .leftJoin(machines, eq(productionOrders.machineId, machines.machineId))
+    .orderBy(productionOrders.createdAt);
+  
+  return c.json(orders);
+});
+
+// Create single production order (with duplicate check)
+app.post('/api/orders', zValidator('json', productionOrderSchema), async (c) => {
+  const data = c.req.valid('json');
+  
+  // Check for duplicate order number
+  const existing = await db.select()
+    .from(productionOrders)
+    .where(eq(productionOrders.orderNumber, data.orderNumber))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return c.json({ error: `Order ${data.orderNumber} already exists` }, 409);
+  }
+  
+  await db.insert(productionOrders).values({
+    orderNumber: data.orderNumber,
+    partNumber: data.partNumber,
+    quantityRequired: data.quantityRequired,
+    dueDate: data.dueDate,
+  });
+  
+  return c.json({ success: true, orderNumber: data.orderNumber });
+});
+
+// Bulk import production orders (for Excel paste)
+// Accepts TSV (tab-separated values) or JSON array
+app.post('/api/orders/bulk-import', async (c) => {
+  const contentType = c.req.header('Content-Type');
+  let orders: { orderNumber: string; partNumber: string; quantity: number }[] = [];
+  
+  if (contentType?.includes('text/plain')) {
+    // Parse TSV from Excel paste (Order#, Part#, Quantity)
+    const text = await c.req.text();
+    const lines = text.trim().split('\n');
+    
+    for (const line of lines) {
+      const [orderNumber, partNumber, quantityStr] = line.split('\t').map(s => s.trim());
+      if (orderNumber && partNumber && quantityStr) {
+        orders.push({
+          orderNumber,
+          partNumber,
+          quantity: parseInt(quantityStr, 10),
+        });
+      }
+    }
+  } else {
+    // JSON array
+    orders = await c.req.json();
+  }
+  
+  if (orders.length === 0) {
+    return c.json({ error: 'No valid orders to import' }, 400);
+  }
+  
+  // Check for duplicates in database
+  const existingOrders = await db.select({ orderNumber: productionOrders.orderNumber })
+    .from(productionOrders)
+    .where(inArray(productionOrders.orderNumber, orders.map(o => o.orderNumber)));
+  
+  const existingSet = new Set(existingOrders.map(o => o.orderNumber));
+  const duplicates = orders.filter(o => existingSet.has(o.orderNumber));
+  const newOrders = orders.filter(o => !existingSet.has(o.orderNumber));
+  
+  // Also check for duplicates within the import itself
+  const seenInImport = new Set<string>();
+  const duplicatesInImport: string[] = [];
+  
+  for (const order of newOrders) {
+    if (seenInImport.has(order.orderNumber)) {
+      duplicatesInImport.push(order.orderNumber);
+    }
+    seenInImport.add(order.orderNumber);
+  }
+  
+  // Insert valid orders
+  const uniqueOrders = newOrders.filter(
+    o => !duplicatesInImport.includes(o.orderNumber)
+  );
+  
+  if (uniqueOrders.length > 0) {
+    await db.insert(productionOrders).values(
+      uniqueOrders.map(o => ({
+        orderNumber: o.orderNumber,
+        partNumber: o.partNumber,
+        quantityRequired: o.quantity,
+      }))
+    );
+  }
+  
+  return c.json({
+    imported: uniqueOrders.length,
+    skippedDuplicates: duplicates.map(o => o.orderNumber),
+    duplicatesInImport,
+  });
+});
+
+// Assign order to machine
+app.post('/api/orders/:orderNumber/assign', async (c) => {
+  const orderNumber = c.req.param('orderNumber');
+  const { machineId } = await c.req.json();
+  
+  await db.update(productionOrders)
+    .set({ 
+      machineId,
+      status: 'assigned',
+    })
+    .where(eq(productionOrders.orderNumber, orderNumber));
+  
+  return c.json({ success: true });
+});
+
+// Update order status
+app.patch('/api/orders/:orderNumber', async (c) => {
+  const orderNumber = c.req.param('orderNumber');
+  const updates = await c.req.json();
+  
+  await db.update(productionOrders)
+    .set(updates)
+    .where(eq(productionOrders.orderNumber, orderNumber));
+  
+  return c.json({ success: true });
 });
 
 // Receive status from ESP32
@@ -516,7 +719,7 @@ export default {
 
 ## Phase 7: Frontend (React + Vite)
 
-![Dashboard UI Mockup](assets/dashboard_ui_mockup.png)
+![Dashboard UI Mockup - Light Mode](assets/dashboard_light_mode.png)
 
 ### Setup
 
@@ -621,6 +824,7 @@ interface Machine {
   cycleCount: number;
   secondsSinceSeen: number | null;
   productionOrder?: string;
+  partNumber?: string;
   partName?: string;
   targetCycleTime?: number;
 }
@@ -667,8 +871,12 @@ export function MachineCard({ machine }: { machine: Machine }) {
       
       <div className="space-y-2 text-left">
         <div className="flex justify-between">
+          <span className="text-slate-400">Part #:</span>
+          <span className="font-mono">{machine.partNumber || '-'}</span>
+        </div>
+        <div className="flex justify-between">
           <span className="text-slate-400">Part:</span>
-          <span className="font-medium">{machine.partName || '-'}</span>
+          <span className="font-medium truncate max-w-[150px]">{machine.partName || '-'}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-400">Cycle Time:</span>
@@ -693,6 +901,146 @@ export function MachineCard({ machine }: { machine: Machine }) {
   );
 }
 ```
+
+### Order Import Component (Excel Paste)
+
+```tsx
+// packages/web/src/components/OrderImport.tsx
+
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+interface ImportResult {
+  imported: number;
+  skippedDuplicates: string[];
+  duplicatesInImport: string[];
+}
+
+export function OrderImport() {
+  const [pasteData, setPasteData] = useState('');
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const queryClient = useQueryClient();
+  
+  const importMutation = useMutation({
+    mutationFn: async (data: string) => {
+      const res = await fetch('/api/orders/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: data,
+      });
+      if (!res.ok) throw new Error('Import failed');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setPasteData(''); // Clear after success
+    },
+  });
+  
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text');
+    setPasteData(text);
+  };
+  
+  const handleImport = () => {
+    if (pasteData.trim()) {
+      importMutation.mutate(pasteData);
+    }
+  };
+  
+  // Preview parsed data
+  const previewRows = pasteData
+    .trim()
+    .split('\n')
+    .slice(0, 5) // Show first 5 rows
+    .map(line => line.split('\t'));
+  
+  return (
+    <div className="bg-slate-800 rounded-xl p-6 space-y-4">
+      <h2 className="text-xl font-semibold">Import Production Orders</h2>
+      
+      <p className="text-slate-400 text-sm">
+        Copy cells from Excel (Order #, Part #, Quantity) and paste below.
+        Duplicate order numbers will be skipped.
+      </p>
+      
+      <textarea
+        className="w-full h-32 bg-slate-900 rounded-lg p-3 font-mono text-sm border border-slate-700 focus:border-blue-500 focus:outline-none"
+        placeholder="Paste from Excel here...&#10;1354981	147933-00	5000&#10;1354982	141927-00	3000"
+        value={pasteData}
+        onChange={(e) => setPasteData(e.target.value)}
+        onPaste={handlePaste}
+      />
+      
+      {/* Preview */}
+      {previewRows.length > 0 && previewRows[0].length > 1 && (
+        <div className="bg-slate-900 rounded-lg p-3">
+          <p className="text-xs text-slate-500 mb-2">
+            Preview ({pasteData.trim().split('\n').length} rows):
+          </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400">
+                <th className="text-left">Order #</th>
+                <th className="text-left">Part #</th>
+                <th className="text-right">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {previewRows.map((row, i) => (
+                <tr key={i}>
+                  <td className="font-mono">{row[0]}</td>
+                  <td className="font-mono">{row[1]}</td>
+                  <td className="text-right">{row[2]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {pasteData.trim().split('\n').length > 5 && (
+            <p className="text-xs text-slate-500 mt-2">
+              ... and {pasteData.trim().split('\n').length - 5} more
+            </p>
+          )}
+        </div>
+      )}
+      
+      <button
+        onClick={handleImport}
+        disabled={!pasteData.trim() || importMutation.isPending}
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 rounded-lg font-medium transition-colors"
+      >
+        {importMutation.isPending ? 'Importing...' : 'Import Orders'}
+      </button>
+      
+      {/* Results */}
+      {result && (
+        <div className="bg-slate-900 rounded-lg p-4 space-y-2">
+          <p className="text-green-400">
+            ✓ Imported {result.imported} orders
+          </p>
+          {result.skippedDuplicates.length > 0 && (
+            <p className="text-yellow-400">
+              ⚠ Skipped {result.skippedDuplicates.length} duplicates: {' '}
+              {result.skippedDuplicates.slice(0, 3).join(', ')}
+              {result.skippedDuplicates.length > 3 && '...'}
+            </p>
+          )}
+          {result.duplicatesInImport.length > 0 && (
+            <p className="text-orange-400">
+              ⚠ Duplicate within paste: {result.duplicatesInImport.join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+      
+      {importMutation.isError && (
+        <p className="text-red-400">Import failed. Check the data format.</p>
+      )}
+    </div>
+  );
+}
 
 ### Summary Bar Component
 
