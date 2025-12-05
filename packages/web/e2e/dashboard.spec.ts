@@ -33,7 +33,7 @@ test.describe('Dashboard', () => {
     await page.getByRole('button', { name: 'Sign In' }).click();
 
     // Should see dashboard after login (header contains "Injection Molding")
-    await expect(page.locator('h1')).toContainText('Injection Molding');
+    await expect(page.locator('h1')).toContainText('Shop Floor Overview');
 
     // Should see machines connected footer
     await expect(page.getByText('machines connected')).toBeVisible();
@@ -48,12 +48,12 @@ test.describe('Dashboard Features', () => {
     await page.getByPlaceholder('Enter password').fill('admin123');
     await page.getByRole('button', { name: 'Sign In' }).click();
     // Wait for dashboard to load
-    await expect(page.locator('h1')).toContainText('Injection Molding');
+    await expect(page.locator('h1')).toContainText('Shop Floor Overview');
   });
 
   test('should toggle between grid and table view', async ({ page }) => {
-    // Click Manage button for table view
-    await page.getByRole('button', { name: 'Manage' }).click();
+    // Click Table button for table view
+    await page.getByRole('button', { name: 'Table' }).click();
 
     // Should see table headers
     await expect(page.getByRole('columnheader', { name: 'Machine' })).toBeVisible();
