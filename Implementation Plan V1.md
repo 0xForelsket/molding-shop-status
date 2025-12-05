@@ -379,6 +379,59 @@ export const productionOrders = pgTable('production_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Shifts - Day and Night
+export const shifts = pgTable('shifts', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),           // "Day Shift", "Night Shift"
+  startTime: text('start_time').notNull(), // "07:00"
+  endTime: text('end_time').notNull(),     // "19:00"
+  isActive: boolean('is_active').default(true),
+});
+
+// Downtime Reasons - for tracking why machines are idle
+export const downtimeReasons = pgTable('downtime_reasons', {
+  code: text('code').primaryKey(),        // "MOLD_CHANGE"
+  name: text('name').notNull(),           // "Mold Change"
+  category: text('category').notNull(),   // "planned" or "unplanned"
+  isActive: boolean('is_active').default(true),
+});
+
+// Downtime Logs - when a machine goes idle with a reason
+export const downtimeLogs = pgTable('downtime_logs', {
+  id: serial('id').primaryKey(),
+  machineId: integer('machine_id')
+    .references(() => machines.machineId)
+    .notNull(),
+  reasonCode: text('reason_code')
+    .references(() => downtimeReasons.code)
+    .notNull(),
+  shiftId: integer('shift_id')
+    .references(() => shifts.id),
+  notes: text('notes'),
+  startedAt: timestamp('started_at').defaultNow(),
+  endedAt: timestamp('ended_at'),
+  durationMinutes: integer('duration_minutes'),
+});
+
+// Product Lines - for filtering/reporting
+export const productLines = pgTable('product_lines', {
+  code: text('code').primaryKey(),        // "WAVE_1_1"
+  name: text('name').notNull(),           // "Wave 1.1"
+  isActive: boolean('is_active').default(true),
+});
+
+// Users - for authentication and tracking who made changes
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  username: text('username').notNull().unique(),
+  passwordHash: text('password_hash'),    // null for first login
+  name: text('name').notNull(),
+  role: text('role').notNull(),           // "admin", "planner", "line_leader", "viewer"
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  lastLoginAt: timestamp('last_login_at'),
+});
+
 // Type exports for use throughout the app
 export type Machine = typeof machines.$inferSelect;
 export type NewMachine = typeof machines.$inferInsert;
@@ -386,7 +439,11 @@ export type StatusLog = typeof statusLogs.$inferSelect;
 export type Part = typeof parts.$inferSelect;
 export type MachinePart = typeof machineParts.$inferSelect;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
-```
+export type Shift = typeof shifts.$inferSelect;
+export type DowntimeReason = typeof downtimeReasons.$inferSelect;
+export type DowntimeLog = typeof downtimeLogs.$inferSelect;
+export type ProductLine = typeof productLines.$inferSelect;
+export type User = typeof users.$inferSelect;
 
 ```typescript
 // packages/api/src/db/index.ts
@@ -1169,16 +1226,19 @@ export function SummaryBar({ summary }: { summary: Summary }) {
     "dev": "bun --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "bun run src/db/seeds/run.ts"
   },
   "dependencies": {
     "hono": "^4.0.0",
     "@hono/zod-validator": "^0.4.0",
     "drizzle-orm": "^0.35.0",
+    "pg": "^8.11.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.26.0"
+    "drizzle-kit": "^0.26.0",
+    "@types/pg": "^8.11.0"
   }
 }
 ```
@@ -1187,23 +1247,23 @@ export function SummaryBar({ summary }: { summary: Summary }) {
 
 ```bash
 # .env.example
-DATABASE_URL=./machine_status.db
+DATABASE_URL=postgresql://molding:molding_secret@localhost:5432/molding_shop
 API_PORT=3000
 VITE_API_URL=http://localhost:3000
 ```
 
 ---
 
-## Phase 9: Raspberry Pi Deployment
+## Phase 9: Docker & Deployment
+
+### Quick Start (Development)
 
 ```bash
-# 1. Install Bun
-curl -fsSL https://bun.sh/install | bash
-source ~/.bashrc
+# 1. Start PostgreSQL
+docker compose up -d
 
-# 2. Clone repository
-git clone <your-repo-url> ~/machine-dashboard
-cd ~/machine-dashboard
+# 2. Copy environment file
+cp .env.example .env
 
 # 3. Install dependencies
 bun install
@@ -1211,7 +1271,38 @@ bun install
 # 4. Run database migrations
 bun run db:migrate
 
-# 5. Build for production
+# 5. Seed initial data (machines + parts)
+bun run db:seed
+
+# 6. Start development servers
+bun run dev
+```
+
+### Production Deployment (Raspberry Pi)
+
+```bash
+# 1. Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+
+# 2. Install Bun
+curl -fsSL https://bun.sh/install | bash
+source ~/.bashrc
+
+# 3. Clone repository
+git clone <your-repo-url> ~/machine-dashboard
+cd ~/machine-dashboard
+
+# 4. Start PostgreSQL container
+docker compose up -d postgres
+
+# 5. Install dependencies and build
+bun install
+bun run build
+
+# 6. Run migrations and seed
+bun run db:migrate
+bun run db:seed
 bun run build
 
 # 6. Start server
