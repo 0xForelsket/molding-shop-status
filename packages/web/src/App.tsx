@@ -2,6 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Dashboard } from './components/Dashboard';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { AuthProvider } from './lib/auth';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,7 +17,11 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Dashboard />
+      <AuthProvider>
+        <ProtectedRoute>
+          <Dashboard />
+        </ProtectedRoute>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

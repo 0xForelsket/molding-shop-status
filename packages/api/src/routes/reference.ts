@@ -1,0 +1,195 @@
+// packages/api/src/routes/reference.ts
+// Reference data routes: Parts, Downtime Reasons, Shifts, Product Lines
+
+import { zValidator } from '@hono/zod-validator';
+import { eq } from 'drizzle-orm';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { db } from '../db';
+import { downtimeReasons, machineParts, parts, productLines, shifts } from '../db/schema';
+import { jwtAuth, requireRole } from '../middleware/auth';
+
+export const referenceRoutes = new Hono();
+
+// ============== PARTS ==============
+
+referenceRoutes.get('/parts', async (c) => {
+  const allParts = await db.select().from(parts).orderBy(parts.partNumber);
+  return c.json(allParts);
+});
+
+referenceRoutes.get('/parts/:partNumber', async (c) => {
+  const partNumber = c.req.param('partNumber');
+  const part = await db.select().from(parts).where(eq(parts.partNumber, partNumber)).limit(1);
+
+  if (part.length === 0) {
+    return c.json({ error: 'Part not found' }, 404);
+  }
+
+  // Get machines that can produce this part
+  const capabilities = await db
+    .select()
+    .from(machineParts)
+    .where(eq(machineParts.partNumber, partNumber));
+
+  return c.json({ ...part[0], machines: capabilities });
+});
+
+const partSchema = z.object({
+  partNumber: z.string().min(1),
+  partName: z.string().min(1),
+  productLine: z.string().optional(),
+});
+
+referenceRoutes.post(
+  '/parts',
+  jwtAuth,
+  requireRole('admin', 'planner'),
+  zValidator('json', partSchema),
+  async (c) => {
+    const data = c.req.valid('json');
+
+    await db.insert(parts).values(data).onConflictDoNothing();
+
+    return c.json({ success: true, partNumber: data.partNumber });
+  }
+);
+
+referenceRoutes.patch(
+  '/parts/:partNumber',
+  jwtAuth,
+  requireRole('admin', 'planner'),
+  zValidator('json', partSchema.partial()),
+  async (c) => {
+    const partNumber = c.req.param('partNumber');
+    const updates = c.req.valid('json');
+
+    await db.update(parts).set(updates).where(eq(parts.partNumber, partNumber));
+
+    return c.json({ success: true });
+  }
+);
+
+referenceRoutes.delete('/parts/:partNumber', jwtAuth, requireRole('admin'), async (c) => {
+  const partNumber = c.req.param('partNumber');
+
+  await db.delete(parts).where(eq(parts.partNumber, partNumber));
+
+  return c.json({ success: true });
+});
+
+// ============== DOWNTIME REASONS ==============
+
+referenceRoutes.get('/downtime-reasons', async (c) => {
+  const reasons = await db
+    .select()
+    .from(downtimeReasons)
+    .orderBy(downtimeReasons.category, downtimeReasons.name);
+  return c.json(reasons);
+});
+
+const downtimeReasonSchema = z.object({
+  code: z.string().min(1),
+  name: z.string().min(1),
+  category: z.enum(['planned', 'unplanned']),
+  isActive: z.boolean().default(true),
+});
+
+referenceRoutes.post(
+  '/downtime-reasons',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', downtimeReasonSchema),
+  async (c) => {
+    const data = c.req.valid('json');
+
+    await db.insert(downtimeReasons).values(data).onConflictDoNothing();
+
+    return c.json({ success: true, code: data.code });
+  }
+);
+
+referenceRoutes.patch(
+  '/downtime-reasons/:code',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', downtimeReasonSchema.partial()),
+  async (c) => {
+    const code = c.req.param('code');
+    const updates = c.req.valid('json');
+
+    await db.update(downtimeReasons).set(updates).where(eq(downtimeReasons.code, code));
+
+    return c.json({ success: true });
+  }
+);
+
+// ============== SHIFTS ==============
+
+referenceRoutes.get('/shifts', async (c) => {
+  const allShifts = await db.select().from(shifts).orderBy(shifts.startTime);
+  return c.json(allShifts);
+});
+
+const shiftSchema = z.object({
+  name: z.string().min(1),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/), // HH:MM format
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  isActive: z.boolean().default(true),
+});
+
+referenceRoutes.post(
+  '/shifts',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', shiftSchema),
+  async (c) => {
+    const data = c.req.valid('json');
+
+    const result = await db.insert(shifts).values(data).returning();
+
+    return c.json({ success: true, id: result[0].id });
+  }
+);
+
+referenceRoutes.patch(
+  '/shifts/:id',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', shiftSchema.partial()),
+  async (c) => {
+    const id = Number.parseInt(c.req.param('id'));
+    const updates = c.req.valid('json');
+
+    await db.update(shifts).set(updates).where(eq(shifts.id, id));
+
+    return c.json({ success: true });
+  }
+);
+
+// ============== PRODUCT LINES ==============
+
+referenceRoutes.get('/product-lines', async (c) => {
+  const lines = await db.select().from(productLines).orderBy(productLines.name);
+  return c.json(lines);
+});
+
+const productLineSchema = z.object({
+  code: z.string().min(1),
+  name: z.string().min(1),
+  isActive: z.boolean().default(true),
+});
+
+referenceRoutes.post(
+  '/product-lines',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', productLineSchema),
+  async (c) => {
+    const data = c.req.valid('json');
+
+    await db.insert(productLines).values(data).onConflictDoNothing();
+
+    return c.json({ success: true, code: data.code });
+  }
+);

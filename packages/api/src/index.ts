@@ -1,5 +1,3 @@
-// packages/api/src/index.ts
-
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -9,6 +7,7 @@ import { errorHandler } from './middleware/error-handler';
 import { authRoutes } from './routes/auth';
 import { machineRoutes } from './routes/machines';
 import { orderRoutes } from './routes/orders';
+import { referenceRoutes } from './routes/reference';
 import { statusRoutes } from './routes/status';
 
 const app = new Hono();
@@ -42,6 +41,7 @@ app.route('/api/auth', authRoutes);
 app.route('/api/machines', machineRoutes);
 app.route('/api/status', statusRoutes);
 app.route('/api/orders', orderRoutes);
+app.route('/api/reference', referenceRoutes);
 
 // ============== SUMMARY ENDPOINT ==============
 
