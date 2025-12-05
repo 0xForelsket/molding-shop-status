@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchMachines } from '../lib/api';
 import { getAuthHeader } from '../lib/auth';
 import { Button } from './ui/button';
 import { DataTable } from './ui/data-table';
@@ -16,6 +17,7 @@ interface Part {
   partName: string;
   productLine: string | null;
   compatibleMachines?: string[];
+  machineIds?: number[];
 }
 
 async function fetchParts(): Promise<Part[]> {
@@ -27,10 +29,16 @@ async function fetchParts(): Promise<Part[]> {
 export function PartsPage() {
   const queryClient = useQueryClient();
   const { data: parts = [], isLoading } = useQuery({ queryKey: ['parts'], queryFn: fetchParts });
+  const { data: machines = [] } = useQuery({ queryKey: ['machines'], queryFn: fetchMachines });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<Part | null>(null);
-  const [form, setForm] = useState({ partNumber: '', partName: '', productLine: '' });
+  const [form, setForm] = useState({
+    partNumber: '',
+    partName: '',
+    productLine: '',
+    machineIds: [] as number[],
+  });
 
   useEffect(() => {
     if (editingPart) {
@@ -38,9 +46,10 @@ export function PartsPage() {
         partNumber: editingPart.partNumber,
         partName: editingPart.partName,
         productLine: editingPart.productLine ?? '',
+        machineIds: editingPart.machineIds ?? [],
       });
     } else {
-      setForm({ partNumber: '', partName: '', productLine: '' });
+      setForm({ partNumber: '', partName: '', productLine: '', machineIds: [] });
     }
   }, [editingPart]);
 
@@ -245,6 +254,38 @@ export function PartsPage() {
                 onChange={(e) => setForm((f) => ({ ...f, productLine: e.target.value }))}
                 placeholder="e.g., Wave 1.1"
               />
+            </div>
+            <div>
+              <span className="block text-sm font-medium text-slate-600 mb-2">
+                Compatible Machines
+              </span>
+              <div className="border border-slate-200 rounded-md p-3 h-48 overflow-y-auto bg-slate-50 grid grid-cols-2 gap-2">
+                {machines.map((machine) => (
+                  <label
+                    key={machine.machineId}
+                    className="flex items-center gap-2 p-1 hover:bg-white rounded cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.machineIds.includes(machine.machineId)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setForm((f) => ({
+                          ...f,
+                          machineIds: checked
+                            ? [...f.machineIds, machine.machineId]
+                            : f.machineIds.filter((id) => id !== machine.machineId),
+                        }));
+                      }}
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-sm text-slate-700">
+                      {machine.machineName}{' '}
+                      <span className="text-slate-400 text-xs">({machine.model})</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
             {saveMutation.isError && (
               <p className="text-red-500 text-sm">{(saveMutation.error as Error).message}</p>

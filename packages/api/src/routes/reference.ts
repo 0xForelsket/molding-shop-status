@@ -21,28 +21,32 @@ referenceRoutes.get('/parts', async (c) => {
     .select({
       partNumber: machineParts.partNumber,
       machineName: machines.machineName,
+      machineId: machines.machineId,
     })
     .from(machineParts)
     .leftJoin(machines, eq(machineParts.machineId, machines.machineId));
 
   // internal map for faster lookup
-  const compatibilityMap = new Map<string, Set<string>>();
+  const compatibilityMap = new Map<string, { names: Set<string>; ids: Set<number> }>();
   for (const m of mappings) {
-    if (m.partNumber && m.machineName) {
+    if (m.partNumber && m.machineName && m.machineId) {
       if (!compatibilityMap.has(m.partNumber)) {
-        compatibilityMap.set(m.partNumber, new Set());
+        compatibilityMap.set(m.partNumber, { names: new Set(), ids: new Set() });
       }
-      compatibilityMap.get(m.partNumber)?.add(m.machineName);
+      compatibilityMap.get(m.partNumber)?.names.add(m.machineName);
+      compatibilityMap.get(m.partNumber)?.ids.add(m.machineId);
     }
   }
 
   // Merge
-  const result = allParts.map((p) => ({
-    ...p,
-    compatibleMachines: compatibilityMap.has(p.partNumber)
-      ? Array.from(compatibilityMap.get(p.partNumber)!).sort()
-      : [],
-  }));
+  const result = allParts.map((p) => {
+    const entry = compatibilityMap.get(p.partNumber);
+    return {
+      ...p,
+      compatibleMachines: entry ? Array.from(entry.names).sort() : [],
+      machineIds: entry ? Array.from(entry.ids).sort((a, b) => a - b) : [],
+    };
+  });
 
   return c.json(result);
 });
@@ -68,6 +72,7 @@ const partSchema = z.object({
   partNumber: z.string().min(1),
   partName: z.string().min(1),
   productLine: z.string().optional(),
+  machineIds: z.array(z.number()).optional(),
 });
 
 referenceRoutes.post(
@@ -76,11 +81,25 @@ referenceRoutes.post(
   requireRole('admin', 'planner'),
   zValidator('json', partSchema),
   async (c) => {
-    const data = c.req.valid('json');
+    const { machineIds, ...partData } = c.req.valid('json');
 
-    await db.insert(parts).values(data).onConflictDoNothing();
+    await db.transaction(async (tx) => {
+      await tx.insert(parts).values(partData).onConflictDoNothing();
 
-    return c.json({ success: true, partNumber: data.partNumber });
+      if (machineIds) {
+        // Since it's a new part, we can just insert
+        if (machineIds.length > 0) {
+          await tx.insert(machineParts).values(
+            machineIds.map((mid) => ({
+              machineId: mid,
+              partNumber: partData.partNumber,
+            }))
+          );
+        }
+      }
+    });
+
+    return c.json({ success: true, partNumber: partData.partNumber });
   }
 );
 
@@ -91,9 +110,27 @@ referenceRoutes.patch(
   zValidator('json', partSchema.partial()),
   async (c) => {
     const partNumber = c.req.param('partNumber');
-    const updates = c.req.valid('json');
+    const { machineIds, ...updates } = c.req.valid('json');
 
-    await db.update(parts).set(updates).where(eq(parts.partNumber, partNumber));
+    await db.transaction(async (tx) => {
+      if (Object.keys(updates).length > 0) {
+        await tx.update(parts).set(updates).where(eq(parts.partNumber, partNumber));
+      }
+
+      if (machineIds !== undefined) {
+        // Replace all mappings
+        await tx.delete(machineParts).where(eq(machineParts.partNumber, partNumber));
+
+        if (machineIds.length > 0) {
+          await tx.insert(machineParts).values(
+            machineIds.map((mid) => ({
+              machineId: mid,
+              partNumber: partNumber,
+            }))
+          );
+        }
+      }
+    });
 
     return c.json({ success: true });
   }
