@@ -117,3 +117,4 @@ temp/
 .parcel-cache/
 *.pem
 packages/web/test-results/.last-run.json
+packages/web/playwright-report/index.html
