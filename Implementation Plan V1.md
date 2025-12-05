@@ -461,7 +461,300 @@ export const db = drizzle(pool, { schema });
 
 ---
 
-## Phase 6: Backend API (Hono)
+## Phase 6: Authentication & Authorization
+
+### Authentication Strategy
+
+The system uses a **dual authentication approach**:
+
+1. **API Key** for ESP32 devices (simple, stateless)
+2. **JWT tokens** for dashboard users (session-based)
+
+### Environment Variables
+
+```bash
+# Add to .env
+ESP32_API_KEY=your-secure-esp32-key-here
+JWT_SECRET=your-secure-jwt-secret-32-chars-min
+JWT_EXPIRES_IN=24h
+```
+
+### Auth Middleware
+
+```typescript
+// packages/api/src/middleware/auth.ts
+
+import { Context, Next } from 'hono';
+import { verify } from 'hono/jwt';
+
+const ESP32_API_KEY = process.env.ESP32_API_KEY || 'dev-esp32-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-prod';
+
+// Middleware for ESP32 status reports (API key auth)
+export async function esp32Auth(c: Context, next: Next) {
+  const apiKey = c.req.header('X-API-Key');
+  
+  if (!apiKey || apiKey !== ESP32_API_KEY) {
+    return c.json({ error: 'Invalid or missing API key' }, 401);
+  }
+  
+  await next();
+}
+
+// Middleware for dashboard users (JWT auth)
+export async function jwtAuth(c: Context, next: Next) {
+  const authHeader = c.req.header('Authorization');
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing authorization header' }, 401);
+  }
+  
+  const token = authHeader.slice(7);
+  
+  try {
+    const payload = await verify(token, JWT_SECRET);
+    c.set('user', payload);
+    await next();
+  } catch (err) {
+    return c.json({ error: 'Invalid or expired token' }, 401);
+  }
+}
+
+// Role-based access control
+export function requireRole(...roles: string[]) {
+  return async (c: Context, next: Next) => {
+    const user = c.get('user');
+    
+    if (!user || !roles.includes(user.role)) {
+      return c.json({ error: 'Insufficient permissions' }, 403);
+    }
+    
+    await next();
+  };
+}
+```
+
+### Login Endpoint
+
+```typescript
+// packages/api/src/routes/auth.ts
+
+import { Hono } from 'hono';
+import { sign } from 'hono/jwt';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
+import { eq } from 'drizzle-orm';
+import { db } from '../db';
+import { users } from '../db/schema';
+
+const authRoutes = new Hono();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-prod';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+
+const loginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+authRoutes.post('/login', zValidator('json', loginSchema), async (c) => {
+  const { username, password } = c.req.valid('json');
+  
+  const user = await db.select()
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+  
+  if (user.length === 0) {
+    return c.json({ error: 'Invalid credentials' }, 401);
+  }
+  
+  // First login: password hash is null, allow any password and set it
+  if (user[0].passwordHash === null) {
+    // Hash and save the password (using Bun's built-in hasher)
+    const hash = await Bun.password.hash(password);
+    await db.update(users)
+      .set({ passwordHash: hash, lastLoginAt: new Date().toISOString() })
+      .where(eq(users.id, user[0].id));
+  } else {
+    // Verify password
+    const valid = await Bun.password.verify(password, user[0].passwordHash);
+    if (!valid) {
+      return c.json({ error: 'Invalid credentials' }, 401);
+    }
+    
+    // Update last login
+    await db.update(users)
+      .set({ lastLoginAt: new Date().toISOString() })
+      .where(eq(users.id, user[0].id));
+  }
+  
+  // Generate JWT
+  const token = await sign({
+    sub: user[0].id,
+    username: user[0].username,
+    role: user[0].role,
+    name: user[0].name,
+    exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
+  }, JWT_SECRET);
+  
+  return c.json({
+    token,
+    user: {
+      id: user[0].id,
+      username: user[0].username,
+      name: user[0].name,
+      role: user[0].role,
+    },
+  });
+});
+
+// Get current user info
+authRoutes.get('/me', jwtAuth, async (c) => {
+  const payload = c.get('user');
+  return c.json(payload);
+});
+
+export { authRoutes };
+```
+
+### ESP32 Firmware Update (add API key)
+
+```cpp
+// In machine_monitor.ino - add API key to sendStatus()
+
+const char* API_KEY = "your-secure-esp32-key-here";  // Same as ESP32_API_KEY in .env
+
+void sendStatus(bool green, bool red) {
+  if (WiFi.status() != WL_CONNECTED) {
+    wifiConnected = false;
+    return;
+  }
+  
+  HTTPClient http;
+  http.begin(SERVER_URL);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-API-Key", API_KEY);  // <-- Add this line
+  
+  // ... rest of function
+}
+```
+
+---
+
+## Phase 7: Error Handling
+
+### Global Error Handler
+
+```typescript
+// packages/api/src/middleware/error-handler.ts
+
+import { Context } from 'hono';
+import { HTTPException } from 'hono/http-exception';
+import { ZodError } from 'zod';
+
+export function errorHandler(err: Error, c: Context) {
+  console.error(`[ERROR] ${new Date().toISOString()}:`, err);
+  
+  // Zod validation errors
+  if (err instanceof ZodError) {
+    return c.json({
+      error: 'Validation failed',
+      details: err.errors.map(e => ({
+        field: e.path.join('.'),
+        message: e.message,
+      })),
+    }, 400);
+  }
+  
+  // HTTP exceptions (thrown intentionally)
+  if (err instanceof HTTPException) {
+    return c.json({ error: err.message }, err.status);
+  }
+  
+  // Database errors
+  if (err.message?.includes('duplicate key')) {
+    return c.json({ error: 'Resource already exists' }, 409);
+  }
+  
+  if (err.message?.includes('violates foreign key')) {
+    return c.json({ error: 'Referenced resource not found' }, 400);
+  }
+  
+  // Unknown errors - don't leak details in production
+  const isDev = process.env.NODE_ENV !== 'production';
+  return c.json({
+    error: 'Internal server error',
+    ...(isDev && { message: err.message, stack: err.stack }),
+  }, 500);
+}
+```
+
+### Database Operation Wrapper
+
+```typescript
+// packages/api/src/lib/db-utils.ts
+
+import { Context } from 'hono';
+
+// Wrapper for database operations with consistent error handling
+export async function dbOperation<T>(
+  c: Context,
+  operation: () => Promise<T>,
+  errorMessage = 'Database operation failed'
+): Promise<T | Response> {
+  try {
+    return await operation();
+  } catch (err) {
+    console.error(`[DB Error] ${errorMessage}:`, err);
+    throw err; // Re-throw for global error handler
+  }
+}
+```
+
+### Apply to Main App
+
+```typescript
+// packages/api/src/index.ts (updated)
+
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
+import { errorHandler } from './middleware/error-handler';
+import { esp32Auth, jwtAuth, requireRole } from './middleware/auth';
+import { authRoutes } from './routes/auth';
+
+const app = new Hono();
+
+// Global middleware
+app.use('*', logger());  // Request logging
+app.use('*', cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  credentials: true,
+}));
+
+// Global error handler
+app.onError(errorHandler);
+
+// Health check (no auth required)
+app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+// Auth routes (no auth required)
+app.route('/api/auth', authRoutes);
+
+// ESP32 status endpoint (API key auth)
+app.post('/api/status', esp32Auth, /* ... handler ... */);
+
+// Dashboard routes (JWT auth for writes)
+app.get('/api/machines', /* ... public read ... */);
+app.post('/api/machines/:id/config', jwtAuth, requireRole('admin', 'planner'), /* ... */);
+app.post('/api/machines/:id/manual-status', jwtAuth, requireRole('admin', 'line_leader'), /* ... */);
+// ... etc
+```
+
+---
+
+## Phase 8: Backend API (Hono)
 
 ```typescript
 // packages/api/src/index.ts
@@ -819,13 +1112,45 @@ app.get('/api/summary', async (c) => {
   });
 });
 
-// SSE endpoint for real-time updates
+// SSE endpoint for real-time updates (with proper cleanup)
 app.get('/api/events', async (c) => {
+  // Create AbortController tied to the request
+  const abortController = new AbortController();
+  
+  // Cleanup when client disconnects
+  c.req.raw.signal.addEventListener('abort', () => {
+    abortController.abort();
+    console.log('[SSE] Client disconnected');
+  });
+  
   return c.streamSSE(async (stream) => {
-    while (true) {
-      const allMachines = await db.select().from(machines);
-      await stream.writeSSE({ data: JSON.stringify(allMachines) });
-      await Bun.sleep(2000);
+    try {
+      while (!abortController.signal.aborted) {
+        const allMachines = await db.select().from(machines);
+        
+        // Check again before writing (client may have disconnected during query)
+        if (abortController.signal.aborted) break;
+        
+        await stream.writeSSE({ 
+          event: 'machines',
+          data: JSON.stringify(allMachines) 
+        });
+        
+        // Use AbortSignal-aware sleep
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(resolve, 2000);
+          abortController.signal.addEventListener('abort', () => {
+            clearTimeout(timeout);
+            resolve(undefined);
+          }, { once: true });
+        });
+      }
+    } catch (err) {
+      if (!abortController.signal.aborted) {
+        console.error('[SSE] Error:', err);
+      }
+    } finally {
+      console.log('[SSE] Stream closed');
     }
   });
 });
@@ -838,7 +1163,7 @@ export default {
 
 ---
 
-## Phase 7: Frontend (React + Vite)
+## Phase 9: Frontend (React + Vite)
 
 ![Dashboard UI Mockup - Light Mode](assets/dashboard_light_mode.png)
 
@@ -1021,6 +1346,61 @@ export function MachineCard({ machine }: { machine: Machine }) {
     </div>
   );
 }
+
+// ============== HELPER FUNCTIONS ==============
+
+// Calculate average cycle time from recent cycles
+// In production, this would use actual cycle data from the backend
+function calculateAverageCycleTime(machine: Machine): string {
+  // If we have target cycle time, use it as a baseline with slight variance
+  if (machine.targetCycleTime) {
+    // Simulate actual cycle time being close to target (±10%)
+    const variance = (Math.random() - 0.5) * 0.2;
+    const actual = machine.targetCycleTime * (1 + variance);
+    return actual.toFixed(1);
+  }
+  return '--';
+}
+
+// Calculate OEE (Overall Equipment Effectiveness)
+// OEE = Availability × Performance × Quality
+// Simplified version based on available data
+function calculateOEE(machine: Machine): number {
+  // If offline or fault, OEE is 0
+  if (machine.status === 'offline' || machine.status === 'fault') {
+    return 0;
+  }
+  
+  // If idle, reduced OEE
+  if (machine.status === 'idle') {
+    return 25; // Machine available but not producing
+  }
+  
+  // If running, calculate based on cycle time performance
+  if (machine.targetCycleTime) {
+    const actualCycleTime = parseFloat(calculateAverageCycleTime(machine));
+    if (!isNaN(actualCycleTime)) {
+      // Performance ratio (target / actual, capped at 100%)
+      const performance = Math.min(machine.targetCycleTime / actualCycleTime, 1);
+      // Assume 95% availability for running machines, 99% quality
+      const oee = 0.95 * performance * 0.99 * 100;
+      return Math.round(oee);
+    }
+  }
+  
+  // Default for running machines without target data
+  return 85;
+}
+
+// Get color class based on OEE percentage
+function getOEEColor(machine: Machine): string {
+  const oee = calculateOEE(machine);
+  
+  if (oee >= 85) return 'text-green-400 font-bold';   // World-class
+  if (oee >= 65) return 'text-yellow-400';            // Typical
+  if (oee >= 40) return 'text-orange-400';            // Needs improvement
+  return 'text-red-400';                              // Poor
+}
 ```
 
 ### Order Import Component (Excel Paste)
@@ -1197,7 +1577,7 @@ export function SummaryBar({ summary }: { summary: Summary }) {
 
 ---
 
-## Phase 8: Development Setup
+## Phase 10: Development Setup
 
 ### Root package.json (Workspace)
 
@@ -1252,9 +1632,22 @@ API_PORT=3000
 VITE_API_URL=http://localhost:3000
 ```
 
+### Seed Files (Existing)
+
+The project includes comprehensive seed data in `packages/api/src/db/seeds/`:
+
+| File | Contents |
+|------|----------|
+| [machines.ts](file:///home/sdhui/projects/molding-shop-status/packages/api/src/db/seeds/machines.ts) | 18 injection molding machines with specs |
+| [parts.ts](file:///home/sdhui/projects/molding-shop-status/packages/api/src/db/seeds/parts.ts) | 109 parts + machine-part capability mappings |
+| [reference-data.ts](file:///home/sdhui/projects/molding-shop-status/packages/api/src/db/seeds/reference-data.ts) | Shifts, downtime reasons, product lines, users |
+| [run.ts](file:///home/sdhui/projects/molding-shop-status/packages/api/src/db/seeds/run.ts) | Seed runner script |
+
+Run seeds with: `bun run db:seed`
+
 ---
 
-## Phase 9: Docker & Deployment
+## Phase 11: Docker & Deployment
 
 ### Quick Start (Development)
 
@@ -1338,7 +1731,7 @@ sudo systemctl start machine-dashboard
 
 ---
 
-## Phase 10: Installation Timeline
+## Phase 12: Installation Timeline
 
 ### Week 1: Pilot (2-3 machines)
 1. Order parts for 3 machines + central system
@@ -1363,7 +1756,7 @@ sudo systemctl start machine-dashboard
 3. **Power source** - Use USB power adapter if 24V isn't convenient
 4. **Unique machine IDs** - Change `MACHINE_ID` when flashing each ESP32
 5. **ESP32 input pins** - GPIO 34/35/36/39 lack internal pull-ups; verify optocoupler module has them
-6. **SQLite write performance** - Enable WAL mode for better concurrent access
+6. **PostgreSQL connection pooling** - Use connection pooling for better concurrent access
 7. **Bun on ARM** - Bun supports ARM64 (Pi 4), but verify version compatibility
 
 ---
