@@ -7,7 +7,7 @@
 ## Technology Stack
 
 | Layer | Technology | Purpose |
-|-------|-----------|---------|
+|-------|-----------|---------:|
 | **Runtime** | Bun | Package manager, runtime, bundler |
 | **Backend** | Hono | Ultrafast web framework |
 | **ORM** | Drizzle | Type-safe database access |
@@ -18,6 +18,338 @@
 | **Data Fetching** | TanStack Query | Caching & real-time updates |
 | **Validation** | Zod | Shared schema validation |
 | **Real-time** | Server-Sent Events (SSE) | Live status updates |
+| **Linting/Formatting** | Biome | Rust-based, 10-100x faster than ESLint |
+| **API Testing** | Bun Test + Hono Test | Native test runner with Hono helpers |
+| **E2E Testing** | Playwright | Cross-browser automation |
+| **Pre-commit** | lefthook | Git hooks for quality gates |
+
+---
+
+## Developer Tooling
+
+### Installation
+
+```bash
+# Root-level dev dependencies
+bun add -D @biomejs/biome lefthook
+
+# API testing (in packages/api)
+cd packages/api
+bun add -D @hono/node-server  # For test server
+
+# E2E testing (in packages/web)
+cd packages/web
+bun add -D @playwright/test
+bunx playwright install chromium  # Install browser
+```
+
+### Biome Configuration
+
+```json
+// biome.json (root)
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "organizeImports": { "enabled": true },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn"
+      },
+      "style": {
+        "noNonNullAssertion": "warn"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "es5"
+    }
+  },
+  "files": {
+    "ignore": ["node_modules", "dist", ".next", "*.min.js"]
+  }
+}
+```
+
+### Bun Test Configuration (API Routes)
+
+```typescript
+// packages/api/src/index.test.ts
+
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { testClient } from 'hono/testing';
+import app from './index';
+
+const client = testClient(app);
+
+describe('Health Check', () => {
+  it('should return ok status', async () => {
+    const res = await client.health.$get();
+    expect(res.status).toBe(200);
+    
+    const json = await res.json();
+    expect(json.status).toBe('ok');
+  });
+});
+
+describe('Machine Status API', () => {
+  it('should return all machines', async () => {
+    const res = await client.api.machines.$get();
+    expect(res.status).toBe(200);
+    
+    const machines = await res.json();
+    expect(Array.isArray(machines)).toBe(true);
+  });
+  
+  it('should reject status update without API key', async () => {
+    const res = await client.api.status.$post({
+      json: {
+        machineId: 1,
+        machineName: 'Test',
+        status: 'running',
+        green: true,
+        red: false,
+        cycleCount: 0,
+      },
+    });
+    expect(res.status).toBe(401);
+  });
+  
+  it('should accept status update with valid API key', async () => {
+    const res = await client.api.status.$post({
+      json: {
+        machineId: 1,
+        machineName: 'Test',
+        status: 'running',
+        green: true,
+        red: false,
+        cycleCount: 100,
+      },
+    }, {
+      headers: { 'X-API-Key': process.env.ESP32_API_KEY || 'dev-esp32-key' },
+    });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('Authentication', () => {
+  it('should reject invalid login', async () => {
+    const res = await client.api.auth.login.$post({
+      json: { username: 'nonexistent', password: 'wrong' },
+    });
+    expect(res.status).toBe(401);
+  });
+});
+```
+
+### Playwright Configuration (E2E)
+
+```typescript
+// packages/web/playwright.config.ts
+
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: 'html',
+  
+  use: {
+    baseURL: 'http://localhost:5173',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+  },
+
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+
+  // Start dev server before tests
+  webServer: {
+    command: 'bun run dev',
+    url: 'http://localhost:5173',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+  },
+});
+```
+
+### E2E Test Examples
+
+```typescript
+// packages/web/e2e/dashboard.spec.ts
+
+import { test, expect } from '@playwright/test';
+
+test.describe('Dashboard', () => {
+  test('should load and display machine cards', async ({ page }) => {
+    await page.goto('/');
+    
+    // Wait for machines to load
+    await expect(page.locator('h1')).toContainText('Machine Status');
+    
+    // Should show summary bar
+    await expect(page.getByText('Running')).toBeVisible();
+    await expect(page.getByText('Idle')).toBeVisible();
+    await expect(page.getByText('Fault')).toBeVisible();
+    
+    // Should show at least one machine card
+    await expect(page.locator('[data-testid="machine-card"]').first()).toBeVisible();
+  });
+  
+  test('should switch between grid and table view', async ({ page }) => {
+    await page.goto('/');
+    
+    // Start in grid view
+    await expect(page.locator('.grid')).toBeVisible();
+    
+    // Click manage/table button
+    await page.getByRole('button', { name: 'Manage' }).click();
+    
+    // Should show table
+    await expect(page.locator('table')).toBeVisible();
+  });
+  
+  test('should show machine details on card', async ({ page }) => {
+    await page.goto('/');
+    
+    const firstCard = page.locator('[data-testid="machine-card"]').first();
+    
+    // Should display key info
+    await expect(firstCard.getByText(/Part #:/)).toBeVisible();
+    await expect(firstCard.getByText(/Cycle Time:/)).toBeVisible();
+    await expect(firstCard.getByText(/OEE:/)).toBeVisible();
+  });
+});
+
+test.describe('Authentication', () => {
+  test('should redirect to login for protected routes', async ({ page }) => {
+    await page.goto('/admin');
+    
+    // Should redirect to login
+    await expect(page).toHaveURL(/.*login/);
+  });
+  
+  test('should login and access admin features', async ({ page }) => {
+    await page.goto('/login');
+    
+    await page.fill('input[name="username"]', 'admin');
+    await page.fill('input[name="password"]', 'admin123');
+    await page.click('button[type="submit"]');
+    
+    // Should redirect to dashboard
+    await expect(page).toHaveURL('/');
+    
+    // Should show admin controls
+    await expect(page.getByText('Settings')).toBeVisible();
+  });
+});
+```
+
+### Pre-commit Hooks (lefthook)
+
+```yaml
+# lefthook.yml (root)
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: "*.{ts,tsx,js,jsx,json}"
+      run: bunx biome check --write {staged_files}
+      stage_fixed: true
+    
+    typecheck:
+      glob: "*.{ts,tsx}"
+      run: bun run typecheck
+      
+pre-push:
+  commands:
+    test:
+      run: bun test
+```
+
+### Package.json Scripts
+
+```json
+// Root package.json - add these scripts
+{
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "build": "bun run --filter '*' build",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter api test",
+    "test:e2e": "bun run --filter web test:e2e",
+    "test:all": "bun test && bun run test:e2e",
+    "prepare": "lefthook install"
+  }
+}
+
+// packages/api/package.json
+{
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  }
+}
+
+// packages/web/package.json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+### Running Tests
+
+```bash
+# Run all API tests
+bun test
+
+# Run specific API test file
+bun test packages/api/src/index.test.ts
+
+# Run E2E tests (headless)
+cd packages/web && bun run test:e2e
+
+# Run E2E tests with UI (for debugging)
+cd packages/web && bun run test:e2e:ui
+
+# Run all tests
+bun run test:all
+
+# Check/fix lint issues
+bun run lint:fix
+```
 
 ---
 
