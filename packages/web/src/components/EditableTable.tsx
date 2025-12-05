@@ -4,7 +4,7 @@
 import { Pencil, Save, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import type { Machine } from '../lib/api';
-import { getAuthHeader } from '../lib/auth';
+import { getAuthHeader, useAuth } from '../lib/auth';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 
@@ -48,20 +48,28 @@ const MachineRow = memo(function MachineRow({
   machine: Machine;
   isEditing: boolean;
   onEdit: () => void;
-  onSave: (orderNumber: string | null) => void;
+  onSave: (data: {
+    productionOrder: string | null;
+    status: Machine['status'];
+    inputMode: Machine['inputMode'];
+  }) => void;
   onCancel: () => void;
   availableData: AvailableData | null;
   isSaving: boolean;
 }) {
   const [selectedOrder, setSelectedOrder] = useState(machine.productionOrder ?? '');
+  const [status, setStatus] = useState<Machine['status']>(machine.status);
+  const [inputMode, setInputMode] = useState<Machine['inputMode']>(machine.inputMode);
   const [selectMode, setSelectMode] = useState<'order' | 'part'>('order');
 
   useEffect(() => {
     if (isEditing) {
       setSelectedOrder(machine.productionOrder ?? '');
+      setStatus(machine.status);
+      setInputMode(machine.inputMode);
       setSelectMode('order');
     }
-  }, [isEditing, machine.productionOrder]);
+  }, [isEditing, machine.productionOrder, machine.status, machine.inputMode]);
 
   const handlePartSelect = (partNumber: string) => {
     if (!availableData) return;
@@ -77,14 +85,27 @@ const MachineRow = memo(function MachineRow({
     <tr className={cn('border-b border-slate-100', isEditing ? 'bg-blue-50' : 'hover:bg-slate-50')}>
       <td className="px-3 py-2.5 font-semibold text-slate-900">{machine.machineName}</td>
       <td className="px-3 py-2.5">
-        <span
-          className={cn(
-            'px-2 py-0.5 rounded text-xs font-semibold uppercase',
-            statusBadgeStyles[machine.status]
-          )}
-        >
-          {machine.status}
-        </span>
+        {isEditing && inputMode === 'manual' ? (
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as Machine['status'])}
+            className="h-7 text-xs rounded border border-slate-300 bg-white px-1 text-slate-800 w-full"
+          >
+            <option value="running">Running</option>
+            <option value="idle">Idle</option>
+            <option value="fault">Fault</option>
+            <option value="offline">Offline</option>
+          </select>
+        ) : (
+          <span
+            className={cn(
+              'px-2 py-0.5 rounded text-xs font-semibold uppercase',
+              statusBadgeStyles[isEditing ? status : machine.status]
+            )}
+          >
+            {isEditing ? status : machine.status}
+          </span>
+        )}
       </td>
       <td className="px-3 py-2.5" colSpan={isEditing ? 2 : 1}>
         {isEditing ? (
@@ -166,13 +187,24 @@ const MachineRow = memo(function MachineRow({
         {machine.cycleCount?.toLocaleString() ?? '0'}
       </td>
       <td className="px-3 py-2.5">
-        <span
-          className={
-            machine.inputMode === 'manual' ? 'text-blue-600 font-medium' : 'text-slate-500'
-          }
-        >
-          {machine.inputMode === 'manual' ? 'Manual' : 'Running'}
-        </span>
+        {isEditing ? (
+          <select
+            value={inputMode}
+            onChange={(e) => setInputMode(e.target.value as 'auto' | 'manual')}
+            className="h-7 text-xs rounded border border-slate-300 bg-white px-1 text-slate-800 w-full"
+          >
+            <option value="auto">Auto</option>
+            <option value="manual">Manual</option>
+          </select>
+        ) : (
+          <span
+            className={
+              machine.inputMode === 'manual' ? 'text-blue-600 font-medium' : 'text-slate-500'
+            }
+          >
+            {machine.inputMode === 'manual' ? 'Manual' : 'Running'}
+          </span>
+        )}
       </td>
       <td className="px-3 py-2.5">
         {isEditing ? (
@@ -180,7 +212,7 @@ const MachineRow = memo(function MachineRow({
             <Button
               size="icon"
               variant="ghost"
-              onClick={() => onSave(selectedOrder || null)}
+              onClick={() => onSave({ productionOrder: selectedOrder || null, status, inputMode })}
               disabled={isSaving}
               className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
             >
@@ -214,6 +246,7 @@ export function EditableTable({
   machines,
   onRefresh,
 }: { machines: Machine[]; onRefresh: () => void }) {
+  const { user } = useAuth();
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [availableData, setAvailableData] = useState<AvailableData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -226,21 +259,53 @@ export function EditableTable({
   }, []);
 
   const handleSave = useCallback(
-    async (machineId: number, orderNumber: string | null) => {
+    async (
+      machineId: number,
+      data: {
+        productionOrder: string | null;
+        status: Machine['status'];
+        inputMode: Machine['inputMode'];
+      }
+    ) => {
       setIsSaving(true);
       try {
-        const res = await fetch(`/api/machines/${machineId}/config`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeader(),
-          },
-          body: JSON.stringify({ productionOrder: orderNumber }),
-        });
+        const machine = machines.find((m) => m.machineId === machineId);
+        if (!machine) return;
 
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Failed to save');
+        // 1. Update Input Mode if changed
+        if (data.inputMode !== machine.inputMode) {
+          await fetch(`/api/machines/${machineId}/input-mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ mode: data.inputMode }),
+          });
+        }
+
+        // 2. Update Status if changed (and in manual mode)
+        // We check data.inputMode because we might have just switched it
+        if (data.inputMode === 'manual' && data.status !== machine.status) {
+          await fetch(`/api/machines/${machineId}/manual-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({
+              status: data.status,
+              updatedBy: user?.username || 'admin',
+            }),
+          });
+        }
+
+        // 3. Update Order Configuration if changed
+        // We always update config if order changed, regardless of mode (usually)
+        if (data.productionOrder !== machine.productionOrder) {
+          const res = await fetch(`/api/machines/${machineId}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ productionOrder: data.productionOrder }),
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to update order');
+          }
         }
 
         setEditingRow(null);
@@ -257,7 +322,7 @@ export function EditableTable({
         setIsSaving(false);
       }
     },
-    [onRefresh]
+    [machines, user, onRefresh]
   );
 
   return (
@@ -296,7 +361,7 @@ export function EditableTable({
               machine={machine}
               isEditing={editingRow === machine.machineId}
               onEdit={() => setEditingRow(machine.machineId)}
-              onSave={(order) => handleSave(machine.machineId, order)}
+              onSave={(data) => handleSave(machine.machineId, data)}
               onCancel={() => setEditingRow(null)}
               availableData={availableData}
               isSaving={isSaving}
