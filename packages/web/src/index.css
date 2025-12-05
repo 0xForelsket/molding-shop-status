@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/* Custom CSS variables */
+:root {
+  --color-running: oklch(0.72 0.15 145);
+  --color-idle: oklch(0.8 0.15 85);
+  --color-fault: oklch(0.65 0.2 25);
+  --color-offline: oklch(0.55 0.02 260);
+}
+
+body {
+  background-color: #0f172a; /* slate-900 */
+  color: white;
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Status badge animations */
+.status-fault {
+  animation: pulse-fault 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-fault {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
