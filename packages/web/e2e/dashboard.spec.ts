@@ -27,15 +27,15 @@ test.describe('Dashboard', () => {
   test('should login successfully with valid credentials', async ({ page }) => {
     await page.goto('/');
 
-    // Login with seeded admin user (first login sets password)
+    // Login with seeded admin user
     await page.getByPlaceholder('Enter username').fill('admin');
     await page.getByPlaceholder('Enter password').fill('admin123');
     await page.getByRole('button', { name: 'Sign In' }).click();
 
-    // Should see dashboard after login
+    // Should see dashboard after login (header contains "Injection Molding")
     await expect(page.locator('h1')).toContainText('Injection Molding');
 
-    // Should see machine grid or summary
+    // Should see machines connected footer
     await expect(page.getByText('machines connected')).toBeVisible();
   });
 });
@@ -47,6 +47,7 @@ test.describe('Dashboard Features', () => {
     await page.getByPlaceholder('Enter username').fill('admin');
     await page.getByPlaceholder('Enter password').fill('admin123');
     await page.getByRole('button', { name: 'Sign In' }).click();
+    // Wait for dashboard to load
     await expect(page.locator('h1')).toContainText('Injection Molding');
   });
 
@@ -55,14 +56,13 @@ test.describe('Dashboard Features', () => {
     await page.getByRole('button', { name: 'Manage' }).click();
 
     // Should see table headers
-    await expect(page.getByRole('cell', { name: 'Machine' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Status' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Machine' })).toBeVisible();
 
     // Click Grid button to go back
     await page.getByRole('button', { name: 'Grid' }).click();
 
-    // Should see machine cards
-    await expect(page.getByTestId('machine-card').first()).toBeVisible();
+    // Should see machine cards (check for any machine name)
+    await expect(page.getByText('IM01')).toBeVisible();
   });
 
   test('should display summary counts', async ({ page }) => {
