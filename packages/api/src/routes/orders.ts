@@ -44,7 +44,7 @@ orderRoutes.get('/available', async (c) => {
     if (!byPart.has(order.partNumber)) {
       byPart.set(order.partNumber, { partName: order.partName, orders: [] });
     }
-    byPart.get(order.partNumber)!.orders.push(order);
+    byPart.get(order.partNumber)?.orders.push(order);
   }
 
   // Return both flat list and grouped view
@@ -194,6 +194,15 @@ orderRoutes.patch('/:orderNumber', jwtAuth, requireRole('admin', 'planner'), asy
     .update(productionOrders)
     .set(updates)
     .where(eq(productionOrders.orderNumber, orderNumber));
+
+  return c.json({ success: true });
+});
+
+// Delete order
+orderRoutes.delete('/:orderNumber', jwtAuth, requireRole('admin', 'planner'), async (c) => {
+  const orderNumber = c.req.param('orderNumber');
+
+  await db.delete(productionOrders).where(eq(productionOrders.orderNumber, orderNumber));
 
   return c.json({ success: true });
 });

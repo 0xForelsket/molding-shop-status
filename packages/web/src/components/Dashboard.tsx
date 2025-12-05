@@ -1,6 +1,6 @@
 // packages/web/src/components/Dashboard.tsx
 
-import { LogOut, Upload } from 'lucide-react';
+import { ClipboardList, LogOut, Package, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { useMachines, useSummary } from '../hooks/useMachines';
 import { useAuth } from '../lib/auth';
@@ -10,7 +10,9 @@ import { OrderImport } from './OrderImport';
 import { SummaryBar } from './SummaryBar';
 import { Button } from './ui/button';
 
-export function Dashboard() {
+type Page = 'dashboard' | 'parts' | 'orders';
+
+export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [showImport, setShowImport] = useState(false);
   const { data: machines = [], isLoading, error, refetch } = useMachines();
@@ -43,7 +45,7 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-2 items-center">
           {summary && <SummaryBar summary={summary} />}
 
           <div className="flex bg-slate-800 rounded-lg p-1">
@@ -64,10 +66,20 @@ export function Dashboard() {
           </div>
 
           {hasRole('admin', 'planner') && (
-            <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-              <Upload className="h-4 w-4 mr-2" />
-              Import Orders
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={() => onNavigate('parts')}>
+                <Package className="h-4 w-4 mr-2" />
+                Parts
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onNavigate('orders')}>
+                <ClipboardList className="h-4 w-4 mr-2" />
+                Orders
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Import
+              </Button>
+            </>
           )}
 
           <Button variant="ghost" size="sm" onClick={logout}>
@@ -95,12 +107,10 @@ export function Dashboard() {
         <EditableTable machines={machines} onRefresh={refetch} />
       )}
 
-      {/* Footer with total machines and last update */}
       <footer className="mt-6 text-center text-sm text-slate-500">
         {machines.length} machines connected • Auto-refreshing every 2 seconds
       </footer>
 
-      {/* Order Import Modal */}
       {showImport && (
         <OrderImport onClose={() => setShowImport(false)} onSuccess={() => refetch()} />
       )}
