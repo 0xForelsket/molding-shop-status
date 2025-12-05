@@ -1,5 +1,5 @@
 // packages/web/src/components/EditableTable.tsx
-// Simple editable table - order-based assignment with auto-fill
+// Industrial Precision Style - Light mode editable table
 
 import { Pencil, Save, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -26,6 +26,14 @@ interface AvailableData {
   byPart: PartWithOrders[];
 }
 
+// Status badge styles - solid colors
+const statusBadgeStyles: Record<string, string> = {
+  running: 'bg-emerald-600 text-white',
+  idle: 'bg-amber-500 text-white',
+  fault: 'bg-red-600 text-white',
+  offline: 'bg-slate-400 text-white',
+};
+
 // Memoized row component
 const MachineRow = memo(function MachineRow({
   machine,
@@ -47,7 +55,6 @@ const MachineRow = memo(function MachineRow({
   const [selectedOrder, setSelectedOrder] = useState(machine.productionOrder ?? '');
   const [selectMode, setSelectMode] = useState<'order' | 'part'>('order');
 
-  // Reset when editing starts
   useEffect(() => {
     if (isEditing) {
       setSelectedOrder(machine.productionOrder ?? '');
@@ -55,7 +62,6 @@ const MachineRow = memo(function MachineRow({
     }
   }, [isEditing, machine.productionOrder]);
 
-  // Handle part selection - auto-pick lowest order for that part
   const handlePartSelect = (partNumber: string) => {
     if (!availableData) return;
     const partData = availableData.byPart.find((p) => p.partNumber === partNumber);
@@ -64,46 +70,42 @@ const MachineRow = memo(function MachineRow({
     }
   };
 
-  // Find part info for display when order is selected
   const selectedOrderData = availableData?.orders.find((o) => o.orderNumber === selectedOrder);
 
   return (
-    <tr
-      className={cn(
-        'border-b border-slate-700/50 transition-colors',
-        isEditing ? 'bg-blue-900/20' : 'hover:bg-slate-700/30'
-      )}
-    >
-      <td className="px-3 py-2 font-medium text-white">{machine.machineName}</td>
-      <td className="px-3 py-2">
+    <tr className={cn('border-b border-slate-100', isEditing ? 'bg-blue-50' : 'hover:bg-slate-50')}>
+      <td className="px-3 py-2.5 font-semibold text-slate-900">{machine.machineName}</td>
+      <td className="px-3 py-2.5">
         <span
           className={cn(
-            'px-2 py-0.5 rounded text-xs font-bold uppercase',
-            machine.status === 'running' && 'bg-green-900/50 text-green-400',
-            machine.status === 'idle' && 'bg-yellow-900/50 text-yellow-400',
-            machine.status === 'fault' && 'bg-red-900/50 text-red-400',
-            machine.status === 'offline' && 'bg-slate-700 text-slate-400'
+            'px-2 py-0.5 rounded text-xs font-semibold uppercase',
+            statusBadgeStyles[machine.status]
           )}
         >
           {machine.status}
         </span>
       </td>
-      <td className="px-3 py-2" colSpan={isEditing ? 2 : 1}>
+      <td className="px-3 py-2.5" colSpan={isEditing ? 2 : 1}>
         {isEditing ? (
           <div className="flex gap-2 items-center">
-            {/* Toggle between Order and Part selection */}
-            <div className="flex bg-slate-700 rounded text-xs">
+            <div className="flex bg-slate-200 rounded text-xs">
               <button
                 type="button"
                 onClick={() => setSelectMode('order')}
-                className={cn('px-2 py-1 rounded-l', selectMode === 'order' && 'bg-blue-600')}
+                className={cn(
+                  'px-2 py-1 rounded-l text-slate-700',
+                  selectMode === 'order' && 'bg-white shadow-sm'
+                )}
               >
                 Order
               </button>
               <button
                 type="button"
                 onClick={() => setSelectMode('part')}
-                className={cn('px-2 py-1 rounded-r', selectMode === 'part' && 'bg-blue-600')}
+                className={cn(
+                  'px-2 py-1 rounded-r text-slate-700',
+                  selectMode === 'part' && 'bg-white shadow-sm'
+                )}
               >
                 Part
               </button>
@@ -113,7 +115,7 @@ const MachineRow = memo(function MachineRow({
               <select
                 value={selectedOrder}
                 onChange={(e) => setSelectedOrder(e.target.value)}
-                className="h-8 text-xs flex-1 rounded-md border border-slate-600 bg-slate-700 px-2 text-white"
+                className="h-8 text-xs flex-1 rounded border border-slate-300 bg-white px-2 text-slate-800"
               >
                 <option value="">Clear assignment</option>
                 {availableData?.orders.map((o) => (
@@ -126,7 +128,7 @@ const MachineRow = memo(function MachineRow({
               <select
                 value={selectedOrderData?.partNumber ?? ''}
                 onChange={(e) => handlePartSelect(e.target.value)}
-                className="h-8 text-xs flex-1 rounded-md border border-slate-600 bg-slate-700 px-2 text-white"
+                className="h-8 text-xs flex-1 rounded border border-slate-300 bg-white px-2 text-slate-800"
               >
                 <option value="">Select part...</option>
                 {availableData?.byPart.map((p) => (
@@ -138,26 +140,32 @@ const MachineRow = memo(function MachineRow({
             )}
 
             {selectedOrder && (
-              <span className="text-xs text-slate-400">→ {selectedOrderData?.partNumber}</span>
+              <span className="text-xs text-slate-500">→ {selectedOrderData?.partNumber}</span>
             )}
           </div>
         ) : (
-          <span className="font-mono text-xs">{machine.productionOrder || '-'}</span>
+          <span className="font-mono text-xs text-slate-700">{machine.productionOrder || '-'}</span>
         )}
       </td>
       {!isEditing && (
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5 text-slate-700">
           <span className="truncate max-w-[200px] block">{machine.partNumber || '-'}</span>
         </td>
       )}
-      <td className="px-3 py-2">{machine.targetCycleTime ?? '-'}</td>
-      <td className="px-3 py-2 font-mono">{machine.cycleCount?.toLocaleString() ?? '0'}</td>
-      <td className="px-3 py-2">
-        <span className={machine.inputMode === 'manual' ? 'text-blue-400' : 'text-slate-500'}>
-          {machine.inputMode}
+      <td className="px-3 py-2.5 tabular-nums text-slate-700">{machine.targetCycleTime ?? '-'}</td>
+      <td className="px-3 py-2.5 font-mono tabular-nums text-slate-700">
+        {machine.cycleCount?.toLocaleString() ?? '0'}
+      </td>
+      <td className="px-3 py-2.5">
+        <span
+          className={
+            machine.inputMode === 'manual' ? 'text-blue-600 font-medium' : 'text-slate-500'
+          }
+        >
+          {machine.inputMode === 'manual' ? 'Manual' : 'Running'}
         </span>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2.5">
         {isEditing ? (
           <div className="flex gap-1">
             <Button
@@ -165,7 +173,7 @@ const MachineRow = memo(function MachineRow({
               variant="ghost"
               onClick={() => onSave(selectedOrder || null)}
               disabled={isSaving}
-              className="h-7 w-7 text-green-400 hover:text-green-300"
+              className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
             >
               <Save className="h-4 w-4" />
             </Button>
@@ -173,7 +181,7 @@ const MachineRow = memo(function MachineRow({
               size="icon"
               variant="ghost"
               onClick={onCancel}
-              className="h-7 w-7 text-red-400 hover:text-red-300"
+              className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -183,7 +191,7 @@ const MachineRow = memo(function MachineRow({
             size="icon"
             variant="ghost"
             onClick={onEdit}
-            className="h-7 w-7 text-slate-400 hover:text-white"
+            className="h-7 w-7 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -201,7 +209,6 @@ export function EditableTable({
   const [availableData, setAvailableData] = useState<AvailableData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch available orders on mount
   useEffect(() => {
     fetch('/api/orders/available')
       .then((res) => res.json())
@@ -230,7 +237,6 @@ export function EditableTable({
         setEditingRow(null);
         onRefresh();
 
-        // Refresh available orders (one may now be assigned)
         fetch('/api/orders/available')
           .then((res) => res.json())
           .then((data) => setAvailableData(data))
@@ -246,18 +252,32 @@ export function EditableTable({
   );
 
   return (
-    <div className="bg-slate-800 rounded-xl overflow-hidden">
-      <table className="w-full text-sm">
+    <div className="bg-white rounded border border-slate-200 overflow-hidden">
+      <table className="w-full text-sm table-industrial">
         <thead>
-          <tr className="border-b border-slate-700 bg-slate-800/50">
-            <th className="text-left text-slate-400 font-medium px-3 py-3">Machine</th>
-            <th className="text-left text-slate-400 font-medium px-3 py-3">Status</th>
-            <th className="text-left text-slate-400 font-medium px-3 py-3">Order</th>
-            <th className="text-left text-slate-400 font-medium px-3 py-3">Part #</th>
-            <th className="text-left text-slate-400 font-medium px-3 py-3">Cycle Time</th>
-            <th className="text-left text-slate-400 font-medium px-3 py-3">Cycles</th>
-            <th className="text-left text-slate-400 font-medium px-3 py-3">Mode</th>
-            <th className="text-left text-slate-400 font-medium px-3 py-3 w-20" />
+          <tr className="bg-slate-50">
+            <th className="text-left text-slate-700 font-semibold px-3 py-3 uppercase text-xs tracking-wide">
+              Machine
+            </th>
+            <th className="text-left text-slate-700 font-semibold px-3 py-3 uppercase text-xs tracking-wide">
+              Status
+            </th>
+            <th className="text-left text-slate-700 font-semibold px-3 py-3 uppercase text-xs tracking-wide">
+              Order
+            </th>
+            <th className="text-left text-slate-700 font-semibold px-3 py-3 uppercase text-xs tracking-wide">
+              Part #
+            </th>
+            <th className="text-left text-slate-700 font-semibold px-3 py-3 uppercase text-xs tracking-wide">
+              Cycle Time
+            </th>
+            <th className="text-left text-slate-700 font-semibold px-3 py-3 uppercase text-xs tracking-wide">
+              Cycles
+            </th>
+            <th className="text-left text-slate-700 font-semibold px-3 py-3 uppercase text-xs tracking-wide">
+              Mode
+            </th>
+            <th className="text-left text-slate-700 font-semibold px-3 py-3 w-20" />
           </tr>
         </thead>
         <tbody>

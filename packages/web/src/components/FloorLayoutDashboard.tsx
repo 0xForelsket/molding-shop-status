@@ -1,5 +1,5 @@
 // packages/web/src/components/FloorLayoutDashboard.tsx
-// Floor layout view matching the physical shop floor
+// Industrial Precision Style - Light mode floor layout view
 
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
@@ -27,22 +27,23 @@ async function fetchMachines(): Promise<Machine[]> {
   return res.json();
 }
 
-const statusColors: Record<string, { bg: string; ring: string; text: string }> = {
-  running: { bg: 'bg-green-500/20', ring: 'ring-green-500', text: 'text-green-400' },
-  idle: { bg: 'bg-yellow-500/20', ring: 'ring-yellow-500', text: 'text-yellow-400' },
-  fault: { bg: 'bg-red-500/20', ring: 'ring-red-500', text: 'text-red-400' },
-  offline: { bg: 'bg-slate-600/20', ring: 'ring-slate-600', text: 'text-slate-400' },
+// Status colors - Industrial Precision palette
+const statusColors: Record<string, { bg: string; border: string; text: string }> = {
+  running: { bg: 'bg-emerald-50', border: 'border-emerald-500', text: 'text-emerald-700' },
+  idle: { bg: 'bg-amber-50', border: 'border-amber-500', text: 'text-amber-700' },
+  fault: { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-700' },
+  offline: { bg: 'bg-slate-100', border: 'border-slate-400', text: 'text-slate-500' },
 };
 
-function MachineCard({ machine }: { machine: Machine }) {
+function FloorMachineCard({ machine }: { machine: Machine }) {
   const colors = statusColors[machine.status] || statusColors.offline;
 
   return (
     <div
       className={cn(
-        'relative p-3 rounded-lg ring-2 transition-all hover:scale-105 cursor-pointer min-w-[100px]',
+        'relative p-3 rounded border-l-4 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer min-w-[100px]',
         colors.bg,
-        colors.ring
+        colors.border
       )}
     >
       {/* 2K Badge */}
@@ -53,14 +54,14 @@ function MachineCard({ machine }: { machine: Machine }) {
       )}
 
       {/* Machine Name */}
-      <div className="text-lg font-bold text-white">{machine.machineName}</div>
+      <div className="text-base font-bold text-slate-900">{machine.machineName}</div>
 
       {/* Tonnage */}
-      <div className="text-xs text-slate-400">{machine.tonnage}T</div>
+      <div className="text-xs text-slate-500">{machine.tonnage}T</div>
 
       {/* Status indicator */}
-      <div className={cn('text-xs font-medium mt-1', colors.text)}>
-        {machine.status.charAt(0).toUpperCase() + machine.status.slice(1)}
+      <div className={cn('text-xs font-semibold mt-1 uppercase', colors.text)}>
+        {machine.status}
       </div>
 
       {/* Order info */}
@@ -74,13 +75,13 @@ function MachineCard({ machine }: { machine: Machine }) {
 function ConveyorLine({ label }: { label?: string }) {
   return (
     <div className="relative flex items-center my-4">
-      <div className="flex-1 h-3 bg-gradient-to-r from-blue-900 via-blue-700 to-blue-900 rounded-full shadow-inner">
+      <div className="flex-1 h-2 bg-slate-200 rounded-full">
         <div className="h-full flex items-center justify-center">
-          <div className="w-[90%] h-1.5 bg-blue-500/50 rounded-full" />
+          <div className="w-[95%] h-1 bg-slate-300 rounded-full" />
         </div>
       </div>
       {label && (
-        <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-xs text-slate-500 font-medium">
+        <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-xs text-slate-400 font-medium">
           {label}
         </div>
       )}
@@ -110,90 +111,59 @@ export function FloorLayoutDashboard() {
     return { topRow: top, middleRow: middle, bottomRow: bottom };
   }, [machines]);
 
-  // Summary stats
-  const summary = useMemo(() => {
-    const total = machines.length;
-    const running = machines.filter((m) => m.status === 'running').length;
-    const idle = machines.filter((m) => m.status === 'idle').length;
-    const fault = machines.filter((m) => m.status === 'fault').length;
-    const offline = machines.filter((m) => m.status === 'offline').length;
-    return { total, running, idle, fault, offline };
-  }, [machines]);
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500" />
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-300 border-t-emerald-600" />
       </div>
     );
   }
 
   return (
-    <div className="p-6 bg-slate-900 min-h-screen">
-      {/* Summary Bar */}
-      <div className="flex gap-4 mb-8 justify-center">
-        <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
-          <div className="w-3 h-3 rounded-full bg-green-500" />
-          <span className="text-green-400 font-mono">{summary.running}</span>
-          <span className="text-slate-400 text-sm">Running</span>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
-          <div className="w-3 h-3 rounded-full bg-yellow-500" />
-          <span className="text-yellow-400 font-mono">{summary.idle}</span>
-          <span className="text-slate-400 text-sm">Idle</span>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
-          <div className="w-3 h-3 rounded-full bg-red-500" />
-          <span className="text-red-400 font-mono">{summary.fault}</span>
-          <span className="text-slate-400 text-sm">Fault</span>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
-          <div className="w-3 h-3 rounded-full bg-slate-600" />
-          <span className="text-slate-400 font-mono">{summary.offline}</span>
-          <span className="text-slate-400 text-sm">Offline</span>
-        </div>
+    <div className="space-y-2">
+      {/* TOP ROW */}
+      <div className="text-xs text-slate-500 uppercase tracking-wide pl-2 mb-1">
+        Top Row (Main Conveyor)
+      </div>
+      <div className="flex gap-3 flex-wrap justify-start bg-white border border-slate-200 p-4 rounded">
+        {topRow.map((machine) => (
+          <FloorMachineCard key={machine.machineId} machine={machine} />
+        ))}
       </div>
 
-      {/* Floor Layout */}
-      <div className="max-w-6xl mx-auto space-y-2">
-        {/* TOP ROW */}
-        <div className="text-xs text-slate-500 pl-2 mb-1">Top Row (Main Conveyor)</div>
-        <div className="flex gap-3 flex-wrap justify-start bg-slate-800/30 p-4 rounded-xl">
-          {topRow.map((machine) => (
-            <MachineCard key={machine.machineId} machine={machine} />
-          ))}
-        </div>
+      {/* Main Conveyor Line */}
+      <ConveyorLine label="Main Conveyor 30m" />
 
-        {/* Main Conveyor Line */}
-        <ConveyorLine label="Main Conveyor 30m" />
+      {/* MIDDLE ROW */}
+      <div className="text-xs text-slate-500 uppercase tracking-wide pl-2 mb-1">
+        Middle Row (2K Machines)
+      </div>
+      <div className="flex gap-3 flex-wrap justify-start bg-white border border-slate-200 p-4 rounded">
+        {middleRow.map((machine) => (
+          <FloorMachineCard key={machine.machineId} machine={machine} />
+        ))}
+      </div>
 
-        {/* MIDDLE ROW */}
-        <div className="text-xs text-slate-500 pl-2 mb-1">Middle Row (2K Machines)</div>
-        <div className="flex gap-3 flex-wrap justify-start bg-slate-800/30 p-4 rounded-xl">
-          {middleRow.map((machine) => (
-            <MachineCard key={machine.machineId} machine={machine} />
-          ))}
-        </div>
+      {/* Secondary Conveyor Line */}
+      <ConveyorLine label="Secondary Conveyor 800mm" />
 
-        {/* Secondary Conveyor Line */}
-        <ConveyorLine label="Secondary Conveyor 800mm" />
+      {/* BOTTOM ROW */}
+      <div className="text-xs text-slate-500 uppercase tracking-wide pl-2 mb-1">
+        Bottom Row (60T Machines)
+      </div>
+      <div className="flex gap-3 flex-wrap justify-start bg-white border border-slate-200 p-4 rounded">
+        {bottomRow.map((machine) => (
+          <FloorMachineCard key={machine.machineId} machine={machine} />
+        ))}
+      </div>
 
-        {/* BOTTOM ROW */}
-        <div className="text-xs text-slate-500 pl-2 mb-1">Bottom Row (60T Machines)</div>
-        <div className="flex gap-3 flex-wrap justify-start bg-slate-800/30 p-4 rounded-xl">
-          {bottomRow.map((machine) => (
-            <MachineCard key={machine.machineId} machine={machine} />
-          ))}
-        </div>
-
-        {/* Walkway */}
-        <div className="mt-6 h-8 bg-gradient-to-r from-amber-900/30 via-amber-800/40 to-amber-900/30 rounded-lg flex items-center justify-center">
-          <span className="text-amber-600/60 text-sm font-medium tracking-wider">WALKWAY</span>
-        </div>
+      {/* Walkway */}
+      <div className="mt-6 h-8 bg-amber-50 border border-amber-200 rounded flex items-center justify-center">
+        <span className="text-amber-600 text-sm font-medium tracking-wider">WALKWAY</span>
       </div>
 
       {/* Legend */}
-      <div className="mt-8 flex flex-wrap gap-4 justify-center text-xs text-slate-500">
+      <div className="mt-4 flex flex-wrap gap-4 justify-center text-xs text-slate-500">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 bg-purple-600 rounded text-white text-[10px] flex items-center justify-center font-bold">
             2K
@@ -201,7 +171,7 @@ export function FloorLayoutDashboard() {
           <span>Multi-shot Machine</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="px-2 py-0.5 bg-slate-700 rounded text-slate-300 text-[10px]">160T</div>
+          <div className="px-2 py-0.5 bg-slate-200 rounded text-slate-600 text-[10px]">160T</div>
           <span>Clamping Tonnage</span>
         </div>
       </div>
