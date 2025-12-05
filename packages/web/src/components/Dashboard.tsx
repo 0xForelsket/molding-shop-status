@@ -1,14 +1,21 @@
 // packages/web/src/components/Dashboard.tsx
 
+import { LogOut, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { useMachines, useSummary } from '../hooks/useMachines';
+import { useAuth } from '../lib/auth';
+import { EditableTable } from './EditableTable';
 import { MachineCard } from './MachineCard';
+import { OrderImport } from './OrderImport';
 import { SummaryBar } from './SummaryBar';
+import { Button } from './ui/button';
 
 export function Dashboard() {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
-  const { data: machines = [], isLoading, error } = useMachines();
+  const [showImport, setShowImport] = useState(false);
+  const { data: machines = [], isLoading, error, refetch } = useMachines();
   const { data: summary } = useSummary();
+  const { user, logout, hasRole } = useAuth();
 
   if (error) {
     return (
@@ -27,10 +34,18 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
       <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-700">
-        <h1 className="text-2xl font-semibold">Injection Molding - Machine Status</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-semibold">Injection Molding - Machine Status</h1>
+          {user && (
+            <span className="text-sm text-slate-400 bg-slate-800 px-2 py-1 rounded">
+              {user.name} ({user.role})
+            </span>
+          )}
+        </div>
 
         <div className="flex gap-4 items-center">
           {summary && <SummaryBar summary={summary} />}
+
           <div className="flex bg-slate-800 rounded-lg p-1">
             <button
               type="button"
@@ -47,6 +62,18 @@ export function Dashboard() {
               Manage
             </button>
           </div>
+
+          {hasRole('admin', 'planner') && (
+            <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import Orders
+            </Button>
+          )}
+
+          <Button variant="ghost" size="sm" onClick={logout}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
         </div>
 
         <time className="text-slate-400 text-lg tabular-nums">
@@ -65,59 +92,18 @@ export function Dashboard() {
           ))}
         </div>
       ) : (
-        <div className="bg-slate-800 rounded-xl p-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-400 border-b border-slate-700">
-                <th className="pb-3 px-2">Machine</th>
-                <th className="pb-3 px-2">Status</th>
-                <th className="pb-3 px-2">Order</th>
-                <th className="pb-3 px-2">Part</th>
-                <th className="pb-3 px-2">Cycles</th>
-                <th className="pb-3 px-2">Mode</th>
-              </tr>
-            </thead>
-            <tbody>
-              {machines.map((m) => (
-                <tr
-                  key={m.machineId}
-                  className="border-b border-slate-700/50 hover:bg-slate-700/30"
-                >
-                  <td className="py-3 px-2 font-medium">{m.machineName}</td>
-                  <td className="py-3 px-2">
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                        m.status === 'running'
-                          ? 'bg-green-900/50 text-green-400'
-                          : m.status === 'idle'
-                            ? 'bg-yellow-900/50 text-yellow-400'
-                            : m.status === 'fault'
-                              ? 'bg-red-900/50 text-red-400'
-                              : 'bg-slate-700 text-slate-400'
-                      }`}
-                    >
-                      {m.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-2 font-mono text-xs">{m.productionOrder || '-'}</td>
-                  <td className="py-3 px-2 truncate max-w-[200px]">{m.partName || '-'}</td>
-                  <td className="py-3 px-2 font-mono">{m.cycleCount?.toLocaleString() || '0'}</td>
-                  <td className="py-3 px-2">
-                    <span className={m.inputMode === 'manual' ? 'text-blue-400' : 'text-slate-500'}>
-                      {m.inputMode}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <EditableTable machines={machines} onRefresh={refetch} />
       )}
 
       {/* Footer with total machines and last update */}
       <footer className="mt-6 text-center text-sm text-slate-500">
         {machines.length} machines connected • Auto-refreshing every 2 seconds
       </footer>
+
+      {/* Order Import Modal */}
+      {showImport && (
+        <OrderImport onClose={() => setShowImport(false)} onSuccess={() => refetch()} />
+      )}
     </div>
   );
 }

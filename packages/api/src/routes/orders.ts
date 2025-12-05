@@ -22,6 +22,43 @@ orderRoutes.get('/', async (c) => {
   return c.json(orders);
 });
 
+// Get available orders for machine assignment (not completed/cancelled, sorted by order number)
+orderRoutes.get('/available', async (c) => {
+  const orders = await db
+    .select({
+      orderNumber: productionOrders.orderNumber,
+      partNumber: productionOrders.partNumber,
+      partName: parts.partName,
+      quantityRequired: productionOrders.quantityRequired,
+      quantityCompleted: productionOrders.quantityCompleted,
+      status: productionOrders.status,
+    })
+    .from(productionOrders)
+    .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
+    .where(inArray(productionOrders.status, ['pending', 'assigned', 'running']))
+    .orderBy(productionOrders.orderNumber);
+
+  // Group by part number for the dropdown
+  const byPart = new Map<string, { partName: string | null; orders: typeof orders }>();
+  for (const order of orders) {
+    if (!byPart.has(order.partNumber)) {
+      byPart.set(order.partNumber, { partName: order.partName, orders: [] });
+    }
+    byPart.get(order.partNumber)!.orders.push(order);
+  }
+
+  // Return both flat list and grouped view
+  return c.json({
+    orders,
+    byPart: Array.from(byPart.entries()).map(([partNumber, data]) => ({
+      partNumber,
+      partName: data.partName,
+      lowestOrder: data.orders[0].orderNumber, // First order (lowest) for this part
+      orderCount: data.orders.length,
+    })),
+  });
+});
+
 // Create single production order
 const productionOrderSchema = z.object({
   orderNumber: z.string().min(1),

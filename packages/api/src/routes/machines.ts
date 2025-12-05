@@ -1,11 +1,11 @@
 // packages/api/src/routes/machines.ts
 
 import { zValidator } from '@hono/zod-validator';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { machines, statusLogs } from '../db/schema';
+import { machineParts, machines, parts, productionOrders, statusLogs } from '../db/schema';
 import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const machineRoutes = new Hono();
@@ -44,13 +44,9 @@ machineRoutes.get('/:id', async (c) => {
   return c.json(machine[0]);
 });
 
-// Update machine configuration (production order, part, etc.)
+// Update machine configuration - auto-fills from order and machine_parts
 const machineConfigSchema = z.object({
   productionOrder: z.string().optional().nullable(),
-  partNumber: z.string().optional().nullable(),
-  partName: z.string().optional().nullable(),
-  targetCycleTime: z.number().optional().nullable(),
-  partsPerCycle: z.number().default(1),
 });
 
 machineRoutes.post(
@@ -60,20 +56,71 @@ machineRoutes.post(
   zValidator('json', machineConfigSchema),
   async (c) => {
     const id = Number.parseInt(c.req.param('id'));
-    const data = c.req.valid('json');
+    const { productionOrder } = c.req.valid('json');
 
+    // If no order, clear machine assignment
+    if (!productionOrder) {
+      await db
+        .update(machines)
+        .set({
+          productionOrder: null,
+          partNumber: null,
+          partName: null,
+          targetCycleTime: null,
+          partsPerCycle: 1,
+        })
+        .where(eq(machines.machineId, id));
+
+      return c.json({ success: true });
+    }
+
+    // Look up order to get part number
+    const order = await db
+      .select()
+      .from(productionOrders)
+      .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
+      .where(eq(productionOrders.orderNumber, productionOrder))
+      .limit(1);
+
+    if (order.length === 0) {
+      return c.json({ error: 'Order not found' }, 404);
+    }
+
+    const partNumber = order[0].production_orders.partNumber;
+    const partName = order[0].parts?.partName ?? null;
+
+    // Look up machine-specific cycle time for this part
+    const machinePartConfig = await db
+      .select()
+      .from(machineParts)
+      .where(and(eq(machineParts.machineId, id), eq(machineParts.partNumber, partNumber)))
+      .limit(1);
+
+    const targetCycleTime = machinePartConfig[0]?.targetCycleTime ?? null;
+    const cavityPlan = machinePartConfig[0]?.cavityPlan ?? 1;
+
+    // Update machine with all related data
     await db
       .update(machines)
       .set({
-        productionOrder: data.productionOrder,
-        partNumber: data.partNumber,
-        partName: data.partName,
-        targetCycleTime: data.targetCycleTime,
-        partsPerCycle: data.partsPerCycle,
+        productionOrder,
+        partNumber,
+        partName,
+        targetCycleTime,
+        partsPerCycle: cavityPlan,
       })
       .where(eq(machines.machineId, id));
 
-    return c.json({ success: true });
+    // Update order status to 'assigned' and link to machine
+    await db
+      .update(productionOrders)
+      .set({ machineId: id, status: 'assigned' })
+      .where(eq(productionOrders.orderNumber, productionOrder));
+
+    return c.json({
+      success: true,
+      data: { productionOrder, partNumber, partName, targetCycleTime, partsPerCycle: cavityPlan },
+    });
   }
 );
 
