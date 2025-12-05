@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { streamSSE } from 'hono/streaming';
 import { db } from './db';
 import { machines } from './db/schema';
 import { errorHandler } from './middleware/error-handler';
@@ -78,7 +79,7 @@ app.get('/api/events', async (c) => {
     console.log('[SSE] Client disconnected');
   });
 
-  return c.streamSSE(async (stream) => {
+  return streamSSE(c, async (stream) => {
     try {
       while (!abortController.signal.aborted) {
         const allMachines = await db.select().from(machines);

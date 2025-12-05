@@ -68,6 +68,6 @@ authRoutes.post('/login', zValidator('json', loginSchema), async (c) => {
 
 // Get current user info
 authRoutes.get('/me', jwtAuth, async (c) => {
-  const payload = c.get('user');
+  const payload = c.get('user' as never);
   return c.json(payload);
 });
