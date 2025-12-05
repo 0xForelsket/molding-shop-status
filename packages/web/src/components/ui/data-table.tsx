@@ -1,5 +1,5 @@
 // packages/web/src/components/ui/data-table.tsx
-// Reusable DataTable with sorting, filtering, pagination
+// Industrial Precision Style - Light mode data table
 
 import {
   type ColumnDef,
@@ -77,28 +77,29 @@ export function DataTable<TData, TValue>({
                 setGlobalFilter(e.target.value);
               }
             }}
-            className="pl-9"
+            className="pl-9 bg-white border-slate-300 text-slate-900"
           />
         </div>
-        <div className="text-sm text-slate-400">
+        <div className="text-sm text-slate-500">
           {table.getFilteredRowModel().rows.length} of {data.length} rows
         </div>
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-slate-700 overflow-hidden">
+      <div className="rounded border border-slate-200 overflow-hidden bg-white">
         <table className="w-full text-sm">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-slate-700 bg-slate-800/50">
+              <tr key={headerGroup.id} className="border-b border-slate-200 bg-slate-50">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
                     tabIndex={header.column.getCanSort() ? 0 : undefined}
                     role={header.column.getCanSort() ? 'button' : undefined}
                     className={cn(
-                      'text-left text-slate-400 font-medium px-4 py-3',
-                      header.column.getCanSort() && 'cursor-pointer select-none hover:text-white'
+                      'text-left text-slate-700 font-semibold px-4 py-3 uppercase text-xs tracking-wide',
+                      header.column.getCanSort() &&
+                        'cursor-pointer select-none hover:text-slate-900'
                     )}
                     onClick={header.column.getToggleSortingHandler()}
                     onKeyDown={(e) => {
@@ -113,7 +114,7 @@ export function DataTable<TData, TValue>({
                         ? null
                         : flexRender(header.column.columnDef.header, header.getContext())}
                       {header.column.getCanSort() && (
-                        <span className="text-slate-500">
+                        <span className="text-slate-400">
                           {{
                             asc: <ChevronUp className="h-4 w-4" />,
                             desc: <ChevronDown className="h-4 w-4" />,
@@ -128,15 +129,15 @@ export function DataTable<TData, TValue>({
               </tr>
             ))}
           </thead>
-          <tbody className="bg-slate-800">
+          <tbody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
+                  className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
+                    <td key={cell.id} className="px-4 py-3 text-slate-700">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -144,7 +145,7 @@ export function DataTable<TData, TValue>({
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-slate-400">
+                <td colSpan={columns.length} className="h-24 text-center text-slate-500">
                   No results found.
                 </td>
               </tr>
@@ -155,7 +156,7 @@ export function DataTable<TData, TValue>({
 
       {/* Pagination */}
       <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-400">
+        <div className="text-sm text-slate-500">
           Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
         </div>
         <div className="flex items-center gap-2">

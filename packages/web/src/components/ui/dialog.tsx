@@ -33,7 +33,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <dialog
           open
-          className="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 max-h-[90vh] overflow-auto m-0"
+          className="relative bg-white rounded shadow-lg border border-slate-200 max-h-[90vh] overflow-auto m-0"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
@@ -61,14 +61,14 @@ export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLD
 }
 
 export function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn('text-lg font-semibold text-white', className)} {...props} />;
+  return <h2 className={cn('text-lg font-semibold text-slate-900', className)} {...props} />;
 }
 
 export function DialogDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('text-sm text-slate-400', className)} {...props} />;
+  return <p className={cn('text-sm text-slate-500', className)} {...props} />;
 }
 
 export function DialogClose({
