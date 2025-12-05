@@ -1,6 +1,15 @@
 // packages/web/src/components/Dashboard.tsx
 
-import { ClipboardList, LayoutGrid, LogOut, MapPin, Package, Table, Upload } from 'lucide-react';
+import {
+  ClipboardList,
+  LayoutGrid,
+  LogOut,
+  MapPin,
+  Package,
+  Settings,
+  Table,
+  Upload,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useMachines, useSummary } from '../hooks/useMachines';
 import { useAuth } from '../lib/auth';
@@ -11,7 +20,7 @@ import { OrderImport } from './OrderImport';
 import { SummaryBar } from './SummaryBar';
 import { Button } from './ui/button';
 
-type Page = 'dashboard' | 'parts' | 'orders';
+type Page = 'dashboard' | 'parts' | 'orders' | 'machines';
 
 export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) {
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'floor'>('grid');
@@ -91,6 +100,13 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: Page) => void }) 
                 Import
               </Button>
             </>
+          )}
+
+          {hasRole('admin') && (
+            <Button variant="outline" size="sm" onClick={() => onNavigate('machines')}>
+              <Settings className="h-4 w-4 mr-2" />
+              Machines
+            </Button>
           )}
 
           <Button variant="ghost" size="sm" onClick={logout}>

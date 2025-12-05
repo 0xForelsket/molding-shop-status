@@ -191,3 +191,94 @@ machineRoutes.post(
     return c.json({ success: true, mode });
   }
 );
+
+// ============== CRUD OPERATIONS ==============
+
+// Schema for creating/updating machines
+const machineSchema = z.object({
+  machineName: z.string().min(1),
+  brand: z.string().optional().nullable(),
+  model: z.string().optional().nullable(),
+  serialNo: z.string().optional().nullable(),
+  tonnage: z.number().optional().nullable(),
+  screwDiameter: z.number().optional().nullable(),
+  injectionWeight: z.number().optional().nullable(),
+  is2K: z.boolean().optional().default(false),
+  floorRow: z.enum(['top', 'middle', 'bottom']).optional().nullable(),
+  floorPosition: z.number().optional().nullable(),
+  inputMode: z.enum(['auto', 'manual']).optional().default('auto'),
+});
+
+// Create new machine
+machineRoutes.post(
+  '/',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', machineSchema),
+  async (c) => {
+    const data = c.req.valid('json');
+
+    const result = await db
+      .insert(machines)
+      .values({
+        machineName: data.machineName,
+        brand: data.brand,
+        model: data.model,
+        serialNo: data.serialNo,
+        tonnage: data.tonnage,
+        screwDiameter: data.screwDiameter,
+        injectionWeight: data.injectionWeight,
+        is2K: data.is2K,
+        floorRow: data.floorRow,
+        floorPosition: data.floorPosition,
+        inputMode: data.inputMode,
+      })
+      .returning();
+
+    return c.json(result[0], 201);
+  }
+);
+
+// Update machine
+machineRoutes.put(
+  '/:id',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', machineSchema.partial()),
+  async (c) => {
+    const id = Number.parseInt(c.req.param('id'));
+    const data = c.req.valid('json');
+
+    const machine = await db.select().from(machines).where(eq(machines.machineId, id)).limit(1);
+    if (machine.length === 0) {
+      return c.json({ error: 'Machine not found' }, 404);
+    }
+
+    const result = await db
+      .update(machines)
+      .set(data)
+      .where(eq(machines.machineId, id))
+      .returning();
+
+    return c.json(result[0]);
+  }
+);
+
+// Delete machine
+machineRoutes.delete('/:id', jwtAuth, requireRole('admin'), async (c) => {
+  const id = Number.parseInt(c.req.param('id'));
+
+  const machine = await db.select().from(machines).where(eq(machines.machineId, id)).limit(1);
+  if (machine.length === 0) {
+    return c.json({ error: 'Machine not found' }, 404);
+  }
+
+  // Delete related records first
+  await db.delete(statusLogs).where(eq(statusLogs.machineId, id));
+  await db.delete(machineParts).where(eq(machineParts.machineId, id));
+
+  // Delete the machine
+  await db.delete(machines).where(eq(machines.machineId, id));
+
+  return c.json({ success: true, deleted: machine[0].machineName });
+});
