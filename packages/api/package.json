@@ -14,9 +14,10 @@
     "db:seed": "bun --env-file=../../.env run src/db/seeds/run.ts"
   },
   "dependencies": {
-    "hono": "^4.6.0",
+    "@aws-sdk/client-s3": "^3.946.0",
     "@hono/zod-validator": "^0.4.0",
     "drizzle-orm": "^0.36.0",
+    "hono": "^4.6.0",
     "pg": "^8.13.0",
     "zod": "^3.23.8"
   },

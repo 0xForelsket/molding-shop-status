@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Image as ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchMachines } from '../lib/api';
 import { getAuthHeader } from '../lib/auth';
@@ -15,6 +15,7 @@ import { Input } from './ui/input';
 interface Part {
   partNumber: string;
   partName: string;
+  imageUrl?: string | null;
   productLine: string | null;
   compatibleMachines?: string[];
   machineIds?: number[];
@@ -36,20 +37,23 @@ export function PartsPage() {
   const [form, setForm] = useState({
     partNumber: '',
     partName: '',
+    imageUrl: '',
     productLine: '',
     machineIds: [] as number[],
   });
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (editingPart) {
       setForm({
         partNumber: editingPart.partNumber,
         partName: editingPart.partName,
+        imageUrl: editingPart.imageUrl ?? '',
         productLine: editingPart.productLine ?? '',
         machineIds: editingPart.machineIds ?? [],
       });
     } else {
-      setForm({ partNumber: '', partName: '', productLine: '', machineIds: [] });
+      setForm({ partNumber: '', partName: '', imageUrl: '', productLine: '', machineIds: [] });
     }
   }, [editingPart]);
 
@@ -115,6 +119,26 @@ export function PartsPage() {
         accessorKey: 'partNumber',
         header: 'Part Number',
         cell: ({ row }) => <span className="font-mono">{row.getValue('partNumber')}</span>,
+      },
+      {
+        accessorKey: 'imageUrl',
+        header: 'Image',
+        cell: ({ row }) => {
+          const url = row.original.imageUrl;
+          if (!url)
+            return (
+              <div className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center">
+                <ImageIcon className="w-4 h-4 text-slate-300" />
+              </div>
+            );
+          return (
+            <img
+              src={url}
+              alt={row.original.partName}
+              className="w-10 h-10 object-cover rounded bg-slate-100"
+            />
+          );
+        },
       },
       {
         accessorKey: 'partName',
@@ -287,6 +311,67 @@ export function PartsPage() {
                 ))}
               </div>
             </div>
+
+            <div>
+              <span className="block text-sm font-medium text-slate-600 mb-1">Part Image</span>
+              <div className="flex items-center gap-4">
+                {form.imageUrl ? (
+                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-200 group">
+                    <img src={form.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, imageUrl: '' }))}
+                      className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center bg-slate-50">
+                    <ImageIcon className="w-8 h-8 text-slate-300" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium text-slate-700 shadow-sm">
+                    <Upload className="w-4 h-4" />
+                    {uploading ? 'Uploading...' : 'Upload Image'}
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        setUploading(true);
+                        const formData = new FormData();
+                        formData.append('file', file);
+
+                        try {
+                          const res = await fetch('/api/upload', {
+                            method: 'POST',
+                            body: formData,
+                            headers: getAuthHeader(),
+                          });
+
+                          if (!res.ok) throw new Error('Upload failed');
+
+                          const data = await res.json();
+                          setForm((f) => ({ ...f, imageUrl: data.url }));
+                        } catch (err) {
+                          console.error(err);
+                          alert('Failed to upload image');
+                        } finally {
+                          setUploading(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  <p className="text-xs text-slate-400 mt-1">Supports JPG, PNG, WebP. Max 5MB.</p>
+                </div>
+              </div>
+            </div>
+
             {saveMutation.isError && (
               <p className="text-red-500 text-sm">{(saveMutation.error as Error).message}</p>
             )}

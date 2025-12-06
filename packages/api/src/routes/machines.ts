@@ -43,9 +43,11 @@ machineRoutes.get('/', async (c) => {
       createdAt: machines.createdAt,
       quantityRequired: productionOrders.quantityRequired,
       quantityCompleted: productionOrders.quantityCompleted,
+      imageUrl: parts.imageUrl,
     })
     .from(machines)
     .leftJoin(productionOrders, eq(machines.productionOrder, productionOrders.orderNumber))
+    .leftJoin(parts, eq(machines.partNumber, parts.partNumber))
     .orderBy(machines.machineId);
 
   const now = Date.now();

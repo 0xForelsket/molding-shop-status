@@ -14,6 +14,7 @@ import productionLogsRoutes from './routes/production-logs';
 import { referenceRoutes } from './routes/reference';
 import shiftsRoutes from './routes/shifts';
 import { statusRoutes } from './routes/status';
+import uploadRoutes from './routes/upload';
 
 const app = new Hono();
 
@@ -51,6 +52,7 @@ app.route('/api/production-logs', productionLogsRoutes);
 app.route('/api/shifts', shiftsRoutes);
 app.route('/api/downtime', downtimeRoutes);
 app.route('/api/calendar', calendarRoutes);
+app.route('/api/upload', uploadRoutes);
 
 // ============== SUMMARY ENDPOINT ==============
 

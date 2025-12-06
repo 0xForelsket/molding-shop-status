@@ -57,6 +57,7 @@ export const statusLogs = pgTable('status_logs', {
 export const parts = pgTable('parts', {
   partNumber: text('part_number').primaryKey(),
   partName: text('part_name').notNull(),
+  imageUrl: text('image_url'),
   productLine: text('product_line'),
   defaultMachineId: integer('default_machine_id').references(() => machines.machineId),
   createdAt: timestamp('created_at').defaultNow(),
