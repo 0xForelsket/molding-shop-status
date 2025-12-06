@@ -80,6 +80,7 @@ referenceRoutes.get('/parts/:partNumber', async (c) => {
 const partSchema = z.object({
   partNumber: z.string().min(1),
   partName: z.string().min(1),
+  imageUrl: z.string().optional().nullable(),
   productLine: z.string().optional(),
   defaultMachineId: z.number().optional(),
   machineIds: z.array(z.number()).optional(),
