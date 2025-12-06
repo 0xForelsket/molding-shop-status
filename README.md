@@ -10,9 +10,11 @@ A real-time monitoring dashboard for injection molding machines in a manufacturi
 
 - **Real-time Status Monitoring** — See which machines are Running, Idle, Fault, or Offline at a glance
 - **Multiple Dashboard Views** — Grid cards, data table, or spatial floor layout view
+- **Part Image Support** — Upload and display images for parts in the catalog and dashboard
 - **ESP32 IoT Integration** — Automatic data collection from stack light sensors
 - **Production Order Tracking** — Manage orders with CSV bulk import support
-- **Parts Catalog** — Track parts with cycle times and cavity counts
+- **Parts Catalog** — Track parts with cycle times, cavity counts, and images
+- **Scrap Tracking** — Log scrap by reason code per production entry
 - **Role-based Access Control** — Admin, Planner, and Viewer roles with JWT authentication
 - **Industrial Design** — Clean, high-contrast UI optimized for shop floor visibility
 
@@ -34,6 +36,7 @@ A real-time monitoring dashboard for injection molding machines in a manufacturi
 | **Auth** | JWT with Argon2 password hashing |
 | **Linting** | Biome |
 | **Testing** | Playwright (E2E) |
+| **Object Storage** | MinIO (S3-compatible) |
 | **Package Manager** | Bun |
 | **Monorepo** | Bun workspaces |
 
@@ -259,6 +262,7 @@ npx playwright test --headed     # Watch tests in browser
 ## 📖 Documentation
 
 - [Design System](docs/design-system.md) — UI guidelines and component patterns
+- [Database Schema (ERD)](docs/database-schema.md) — Entity relationship diagram
 - [Machine Inventory](docs/machine-inventory.md) — Machine specifications
 - [Parts Catalog](docs/parts-catalog.md) — Product details
 
