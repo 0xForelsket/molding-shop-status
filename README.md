@@ -72,8 +72,58 @@ molding-shop-status/
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) (v1.0+)
-- [Docker](https://www.docker.com/) (for PostgreSQL)
+Before you begin, ensure you have the following installed:
+
+#### Bun (JavaScript Runtime & Package Manager)
+
+```bash
+# Linux/macOS
+curl -fsSL https://bun.sh/install | bash
+
+# Windows (via PowerShell)
+powershell -c "irm bun.sh/install.ps1 | iex"
+
+# Verify installation
+bun --version
+```
+
+#### Docker or Podman (Container Runtime)
+
+**Option A: Docker**
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install docker.io docker-compose
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER  # Log out and back in after this
+
+# macOS
+brew install --cask docker  # Or download Docker Desktop
+
+# Verify
+docker --version
+```
+
+**Option B: Podman (Recommended for Fedora/Bazzite)**
+```bash
+# Fedora/Bazzite (usually pre-installed)
+sudo dnf install podman podman-compose
+
+# Verify
+podman --version
+```
+
+#### Git
+
+```bash
+# Ubuntu/Debian
+sudo apt install git
+
+# Fedora
+sudo dnf install git
+
+# macOS
+brew install git
+```
 
 ### 1. Clone and Install
 
