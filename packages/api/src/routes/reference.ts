@@ -269,6 +269,21 @@ referenceRoutes.post(
   }
 );
 
+referenceRoutes.patch(
+  '/product-lines/:code',
+  jwtAuth,
+  requireRole('admin', 'line_leader'),
+  zValidator('json', productLineSchema.partial()),
+  async (c) => {
+    const code = c.req.param('code');
+    const updates = c.req.valid('json');
+
+    await db.update(productLines).set(updates).where(eq(productLines.code, code));
+
+    return c.json({ success: true });
+  }
+);
+
 // ============== SHIFT BREAKS ==============
 
 referenceRoutes.get('/shift-breaks', async (c) => {
