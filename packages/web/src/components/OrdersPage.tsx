@@ -25,9 +25,14 @@ interface Order {
     quantityCompleted: number;
     status: string;
     machineId: number | null;
+    targetCycleTime: number | null;
+    targetUtilization: number | null;
+    dueDate: string | null;
+    notes: string | null;
   };
   parts: Part | null;
-  machines: { machineName: string } | null;
+  machines: { machineName: string; targetCycleTime: number | null } | null;
+  machine_parts: { targetCycleTime: number | null; cavityPlan: number | null } | null;
 }
 
 // Flatten order for DataTable
@@ -39,6 +44,11 @@ interface FlatOrder {
   quantityCompleted: number;
   status: string;
   machineName: string | null;
+  targetCycleTime: number | null;
+  machineTargetCycleTime: number | null;
+  targetUtilization: number | null;
+  dueDate: string | null;
+  notes: string | null;
 }
 
 async function fetchOrders(): Promise<Order[]> {
@@ -72,6 +82,12 @@ export function OrdersPage() {
         quantityCompleted: o.production_orders.quantityCompleted,
         status: o.production_orders.status,
         machineName: o.machines?.machineName ?? null,
+        targetCycleTime: o.production_orders.targetCycleTime,
+        machineTargetCycleTime:
+          o.machine_parts?.targetCycleTime ?? o.machines?.targetCycleTime ?? null,
+        targetUtilization: o.production_orders.targetUtilization,
+        dueDate: o.production_orders.dueDate,
+        notes: o.production_orders.notes,
       })),
     [ordersRaw]
   );
@@ -84,6 +100,10 @@ export function OrdersPage() {
     partNumber: '',
     quantityRequired: '',
     status: 'pending',
+    targetCycleTime: '',
+    targetUtilization: '',
+    dueDate: '',
+    notes: '',
   });
   const [importText, setImportText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -95,9 +115,26 @@ export function OrdersPage() {
         partNumber: editingOrder.partNumber,
         quantityRequired: String(editingOrder.quantityRequired),
         status: editingOrder.status,
+        targetCycleTime: editingOrder.targetCycleTime ? String(editingOrder.targetCycleTime) : '',
+        targetUtilization: editingOrder.targetUtilization
+          ? String(editingOrder.targetUtilization)
+          : '',
+        dueDate: editingOrder.dueDate
+          ? new Date(editingOrder.dueDate).toISOString().slice(0, 16)
+          : '',
+        notes: editingOrder.notes ?? '',
       });
     } else {
-      setForm({ orderNumber: '', partNumber: '', quantityRequired: '', status: 'pending' });
+      setForm({
+        orderNumber: '',
+        partNumber: '',
+        quantityRequired: '',
+        status: 'pending',
+        targetCycleTime: '',
+        targetUtilization: '',
+        dueDate: '',
+        notes: '',
+      });
     }
   }, [editingOrder]);
 
@@ -109,11 +146,21 @@ export function OrdersPage() {
       const method = editingOrder ? 'PATCH' : 'POST';
 
       const body = editingOrder
-        ? { status: data.status }
+        ? {
+            status: data.status,
+            targetCycleTime: data.targetCycleTime ? Number(data.targetCycleTime) : null,
+            targetUtilization: data.targetUtilization ? Number(data.targetUtilization) : null,
+            dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+            notes: data.notes,
+          }
         : {
             orderNumber: data.orderNumber,
             partNumber: data.partNumber,
             quantityRequired: Number(data.quantityRequired),
+            targetCycleTime: data.targetCycleTime ? Number(data.targetCycleTime) : undefined,
+            targetUtilization: data.targetUtilization ? Number(data.targetUtilization) : undefined,
+            dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
+            notes: data.notes,
           };
 
       const res = await fetch(url, {
@@ -207,30 +254,66 @@ export function OrdersPage() {
     () => [
       {
         accessorKey: 'orderNumber',
-        header: 'Order #',
-        cell: ({ row }) => <span className="font-mono">{row.getValue('orderNumber')}</span>,
-      },
-      {
-        accessorKey: 'partNumber',
-        header: 'Part #',
+        header: 'Job',
         cell: ({ row }) => (
           <div>
-            <span className="font-mono text-sm">{row.getValue('partNumber')}</span>
-            {row.original.partName && (
-              <span className="block text-xs text-slate-400">{row.original.partName}</span>
+            <div className="font-medium text-slate-900">{row.getValue('orderNumber')}</div>
+            <div className="text-xs text-slate-500">
+              {row.original.partNumber}
+              {row.original.partName && ` - ${row.original.partName}`}
+            </div>
+            {row.original.notes && (
+              <div className="text-xs text-slate-400 italic mt-0.5">{row.original.notes}</div>
             )}
           </div>
         ),
       },
       {
+        accessorKey: 'targetCycleTime',
+        header: 'Target Cycle',
+        cell: ({ row }) => {
+          const val = row.original.targetCycleTime ?? row.original.machineTargetCycleTime;
+          return (
+            <div className="flex flex-col">
+              <span className="font-mono">{val ? val.toFixed(1) : '-'}</span>
+              {row.original.targetCycleTime && (
+                <span className="text-[10px] text-amber-600 font-medium">Override</span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: 'quantityRequired',
-        header: 'Quantity',
+        header: 'Target Count',
         cell: ({ row }) => (
-          <span className="font-mono">
-            {row.original.quantityCompleted.toLocaleString()} /{' '}
-            {row.original.quantityRequired.toLocaleString()}
-          </span>
+          <div className="font-mono">{row.original.quantityRequired.toLocaleString()}</div>
         ),
+      },
+      {
+        accessorKey: 'targetUtilization',
+        header: 'Target Utilization',
+        cell: ({ row }) => (
+          <div className="font-mono">
+            {row.original.targetUtilization ? `${row.original.targetUtilization}%` : '-'}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'dueDate',
+        header: 'Due',
+        cell: ({ row }) => {
+          if (!row.original.dueDate) return <span className="text-slate-400">-</span>;
+          const date = new Date(row.original.dueDate);
+          return (
+            <div className="text-sm">
+              {date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              <div className="text-xs text-slate-400">
+                {date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+              </div>
+            </div>
+          );
+        },
       },
       {
         id: 'progress',
@@ -422,20 +505,91 @@ export function OrdersPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="targetCycleTime"
+                        className="block text-sm font-medium text-slate-600 mb-1"
+                      >
+                        Target Cycle (s)
+                      </label>
+                      <Input
+                        id="targetCycleTime"
+                        type="number"
+                        step="0.1"
+                        value={form.targetCycleTime}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, targetCycleTime: e.target.value }))
+                        }
+                        placeholder="Default"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="targetUtilization"
+                        className="block text-sm font-medium text-slate-600 mb-1"
+                      >
+                        Target Utilization (%)
+                      </label>
+                      <Input
+                        id="targetUtilization"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={form.targetUtilization}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, targetUtilization: e.target.value }))
+                        }
+                        placeholder="e.g. 90"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="quantityRequired"
+                        className="block text-sm font-medium text-slate-600 mb-1"
+                      >
+                        Quantity Required
+                      </label>
+                      <Input
+                        id="quantityRequired"
+                        type="number"
+                        value={form.quantityRequired}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, quantityRequired: e.target.value }))
+                        }
+                        placeholder="e.g., 5000"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="dueDate"
+                        className="block text-sm font-medium text-slate-600 mb-1"
+                      >
+                        Due Date
+                      </label>
+                      <Input
+                        id="dueDate"
+                        type="datetime-local"
+                        value={form.dueDate}
+                        onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+                      />
+                    </div>
+                  </div>
                   <div>
                     <label
-                      htmlFor="quantityRequired"
+                      htmlFor="notes"
                       className="block text-sm font-medium text-slate-600 mb-1"
                     >
-                      Quantity Required
+                      Notes
                     </label>
                     <Input
-                      id="quantityRequired"
-                      type="number"
-                      value={form.quantityRequired}
-                      onChange={(e) => setForm((f) => ({ ...f, quantityRequired: e.target.value }))}
-                      placeholder="e.g., 5000"
-                      required
+                      id="notes"
+                      value={form.notes}
+                      onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                      placeholder="Optional notes..."
                     />
                   </div>
                 </>

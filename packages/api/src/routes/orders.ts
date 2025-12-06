@@ -1,7 +1,7 @@
 // packages/api/src/routes/orders.ts
 
 import { zValidator } from '@hono/zod-validator';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
@@ -11,12 +11,25 @@ import { jwtAuth, requireRole } from '../middleware/auth';
 export const orderRoutes = new Hono();
 
 // Get all production orders
+// Get all production orders
 orderRoutes.get('/', async (c) => {
   const orders = await db
-    .select()
+    .select({
+      production_orders: productionOrders,
+      parts: parts,
+      machines: machines,
+      machine_parts: machineParts,
+    })
     .from(productionOrders)
     .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
     .leftJoin(machines, eq(productionOrders.machineId, machines.machineId))
+    .leftJoin(
+      machineParts,
+      and(
+        eq(productionOrders.machineId, machineParts.machineId),
+        eq(productionOrders.partNumber, machineParts.partNumber)
+      )
+    )
     .orderBy(productionOrders.createdAt);
 
   return c.json(orders);
