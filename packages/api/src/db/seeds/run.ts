@@ -18,10 +18,23 @@ import { downtimeReasonSeeds, productLineSeeds, shiftSeeds, userSeeds } from './
 async function seed() {
   console.log('🌱 Seeding database...\n');
 
-  // Seed shifts
-  console.log('  → Inserting shifts...');
+  // Seed/update shifts
+  console.log('  → Upserting shifts...');
   for (const shift of shiftSeeds) {
-    await db.insert(shifts).values(shift).onConflictDoNothing();
+    await db
+      .insert(shifts)
+      .values(shift)
+      .onConflictDoUpdate({
+        target: shifts.id,
+        set: {
+          name: shift.name,
+          startTime: shift.startTime,
+          endTime: shift.endTime,
+          breakStartTime: shift.breakStartTime,
+          breakEndTime: shift.breakEndTime,
+          breakDurationMinutes: shift.breakDurationMinutes,
+        },
+      });
   }
   console.log(`    ✓ ${shiftSeeds.length} shifts`);
 
