@@ -31,7 +31,7 @@ function getOEEColor(oee: number): string {
   return 'text-red-600';
 }
 
-export function MachineCard({ machine }: { machine: Machine }) {
+export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: () => void }) {
   const oee = calculateOEE(machine);
   const cycleTime = formatCycleTime(machine);
 
@@ -51,9 +51,11 @@ export function MachineCard({ machine }: { machine: Machine }) {
   };
 
   return (
-    <div
+    <button
+      type="button"
       data-testid="machine-card"
-      className={`bg-white rounded-lg shadow-sm border border-slate-200 border-t-4 ${statusColors[machine.status]} hover:shadow-md transition-shadow overflow-hidden`}
+      onClick={onClick}
+      className={`bg-white rounded-lg shadow-sm border border-slate-200 border-t-4 ${statusColors[machine.status]} hover:shadow-md transition-shadow overflow-hidden cursor-pointer text-left w-full`}
     >
       {/* Header */}
       <div className="p-4 pb-2">
@@ -155,6 +157,6 @@ export function MachineCard({ machine }: { machine: Machine }) {
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 }

@@ -30,7 +30,12 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
         tabIndex={0}
         aria-label="Close dialog"
       />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
+      <div
+        className="fixed inset-0 flex items-center justify-center p-4"
+        onClick={() => onOpenChange(false)}
+        onKeyDown={(e) => e.key === 'Escape' && onOpenChange(false)}
+        role="presentation"
+      >
         <dialog
           open
           className="relative bg-white rounded shadow-lg border border-slate-200 max-h-[90vh] overflow-auto m-0"

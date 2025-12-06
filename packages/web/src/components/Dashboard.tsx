@@ -3,12 +3,15 @@
 
 import { useState } from 'react';
 import { useMachines, useSummary } from '../hooks/useMachines';
+import type { Machine } from '../lib/api';
 import { EditableTable } from './EditableTable';
 import { FloorLayoutDashboard } from './FloorLayoutDashboard';
 import { MachineCard } from './MachineCard';
+import { MachineDetailDialog } from './MachineDetailDialog';
 
 export function Dashboard() {
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'floor'>('grid');
+  const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
   const { data: machines = [], isLoading, error, refetch } = useMachines();
   const { data: summary } = useSummary();
 
@@ -114,7 +117,11 @@ export function Dashboard() {
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
             {machines.map((machine) => (
-              <MachineCard key={machine.machineId} machine={machine} />
+              <MachineCard
+                key={machine.machineId}
+                machine={machine}
+                onClick={() => setSelectedMachine(machine)}
+              />
             ))}
           </div>
         ) : viewMode === 'floor' ? (
@@ -128,6 +135,12 @@ export function Dashboard() {
       <footer className="h-10 bg-white border-t border-slate-200 flex items-center justify-center text-xs text-slate-400">
         {machines.length} machines connected • Auto-refresh every 2s
       </footer>
+
+      <MachineDetailDialog
+        machine={selectedMachine}
+        isOpen={!!selectedMachine}
+        onClose={() => setSelectedMachine(null)}
+      />
     </>
   );
 }
