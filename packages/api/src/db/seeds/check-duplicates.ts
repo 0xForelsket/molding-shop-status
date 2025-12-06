@@ -1,5 +1,5 @@
 import { db } from '../index';
-import { machineParts } from './schema';
+import { machineParts } from '../schema';
 
 async function check() {
   const all = await db.select().from(machineParts);
