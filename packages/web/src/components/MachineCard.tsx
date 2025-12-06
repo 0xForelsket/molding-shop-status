@@ -31,6 +31,27 @@ function getOEEColor(oee: number): string {
   return 'text-red-600';
 }
 
+function formatDowntimeDuration(lastSeen: string | null, status: string): string | null {
+  if (status !== 'idle' && status !== 'fault' && status !== 'offline') return null;
+  if (!lastSeen) return null;
+
+  const now = new Date();
+  const lastSeenDate = new Date(lastSeen);
+  const diffMs = now.getTime() - lastSeenDate.getTime();
+
+  if (diffMs < 60000) return 'Just now';
+
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 60) return `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMins = minutes % 60;
+  if (hours < 24) return `${hours}h ${remainingMins}m`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
 export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: () => void }) {
   const oee = calculateOEE(machine);
   const cycleTime = formatCycleTime(machine);
@@ -82,6 +103,12 @@ export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: 
             )}
             {machine.status}
           </div>
+          {/* Downtime Duration */}
+          {formatDowntimeDuration(machine.lastSeen, machine.status) && (
+            <span className="text-xs text-slate-400 ml-auto">
+              {formatDowntimeDuration(machine.lastSeen, machine.status)}
+            </span>
+          )}
         </div>
 
         {/* Metrics Grid */}
@@ -121,21 +148,22 @@ export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: 
             <div className="flex justify-between items-end">
               <div>
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">
-                  Order Progress
+                  Order
                 </div>
-                <div className="text-sm font-medium text-slate-700">
-                  {machine.productionOrder ? (
-                    <>
-                      <span className="text-slate-900 font-bold">
+                {machine.productionOrder ? (
+                  <>
+                    <div className="font-bold text-slate-900">{machine.productionOrder}</div>
+                    <div className="text-sm font-medium text-slate-600">
+                      <span className="text-slate-800">
                         {machine.quantityCompleted?.toLocaleString() ?? 0}
                       </span>
                       <span className="text-slate-400 mx-1">/</span>
                       <span>{machine.quantityRequired?.toLocaleString() ?? '-'}</span>
-                    </>
-                  ) : (
-                    <span className="text-slate-400 italic">No Order</span>
-                  )}
-                </div>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-slate-400 italic">No Order</span>
+                )}
               </div>
               {machine.productionOrder && machine.quantityRequired && (
                 <div className="text-xs font-bold text-slate-400">
