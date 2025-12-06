@@ -89,7 +89,11 @@ const productionOrderSchema = z.object({
   orderNumber: z.string().min(1),
   partNumber: z.string().min(1),
   quantityRequired: z.number().positive(),
+  machineId: z.number().optional(),
   dueDate: z.string().optional(),
+  targetCycleTime: z.number().positive().optional(),
+  targetUtilization: z.number().min(0).max(100).optional(),
+  notes: z.string().optional(),
 });
 
 orderRoutes.post(
@@ -98,27 +102,37 @@ orderRoutes.post(
   requireRole('admin', 'planner'),
   zValidator('json', productionOrderSchema),
   async (c) => {
-    const data = c.req.valid('json');
+    try {
+      const data = c.req.valid('json');
 
-    // Check for duplicate order number
-    const existing = await db
-      .select()
-      .from(productionOrders)
-      .where(eq(productionOrders.orderNumber, data.orderNumber))
-      .limit(1);
+      // Check for duplicate order number
+      const existing = await db
+        .select()
+        .from(productionOrders)
+        .where(eq(productionOrders.orderNumber, data.orderNumber))
+        .limit(1);
 
-    if (existing.length > 0) {
-      return c.json({ error: `Order ${data.orderNumber} already exists` }, 409);
+      if (existing.length > 0) {
+        return c.json({ error: `Order ${data.orderNumber} already exists` }, 409);
+      }
+
+      await db.insert(productionOrders).values({
+        orderNumber: data.orderNumber,
+        partNumber: data.partNumber,
+        quantityRequired: data.quantityRequired,
+        machineId: data.machineId,
+        status: data.machineId ? 'assigned' : 'pending',
+        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+        targetCycleTime: data.targetCycleTime,
+        targetUtilization: data.targetUtilization,
+        notes: data.notes,
+      });
+
+      return c.json({ success: true, orderNumber: data.orderNumber });
+    } catch (error) {
+      console.error('Error creating order:', error);
+      return c.json({ error: (error as Error).message }, 500);
     }
-
-    await db.insert(productionOrders).values({
-      orderNumber: data.orderNumber,
-      partNumber: data.partNumber,
-      quantityRequired: data.quantityRequired,
-      dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-    });
-
-    return c.json({ success: true, orderNumber: data.orderNumber });
   }
 );
 

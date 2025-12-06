@@ -72,6 +72,7 @@ const partSchema = z.object({
   partNumber: z.string().min(1),
   partName: z.string().min(1),
   productLine: z.string().optional(),
+  defaultMachineId: z.number().optional(),
   machineIds: z.array(z.number()).optional(),
 });
 

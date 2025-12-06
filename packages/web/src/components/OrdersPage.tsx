@@ -15,6 +15,12 @@ import { Input } from './ui/input';
 interface Part {
   partNumber: string;
   partName: string;
+  defaultMachineId: number | null;
+}
+
+interface Machine {
+  machineId: number;
+  machineName: string;
 }
 
 interface Order {
@@ -63,6 +69,12 @@ async function fetchParts(): Promise<Part[]> {
   return res.json();
 }
 
+async function fetchMachines(): Promise<Machine[]> {
+  const res = await fetch('/api/machines');
+  if (!res.ok) throw new Error('Failed to fetch machines');
+  return res.json();
+}
+
 export function OrdersPage() {
   const queryClient = useQueryClient();
   const { data: ordersRaw = [], isLoading } = useQuery({
@@ -70,6 +82,7 @@ export function OrdersPage() {
     queryFn: fetchOrders,
   });
   const { data: parts = [] } = useQuery({ queryKey: ['parts'], queryFn: fetchParts });
+  const { data: machines = [] } = useQuery({ queryKey: ['machines'], queryFn: fetchMachines });
 
   // Flatten orders for the table
   const orders: FlatOrder[] = useMemo(
@@ -100,6 +113,7 @@ export function OrdersPage() {
     partNumber: '',
     quantityRequired: '',
     status: 'pending',
+    machineId: '',
     targetCycleTime: '',
     targetUtilization: '',
     dueDate: '',
@@ -115,6 +129,13 @@ export function OrdersPage() {
         partNumber: editingOrder.partNumber,
         quantityRequired: String(editingOrder.quantityRequired),
         status: editingOrder.status,
+        machineId: '', // We don't have machineId in FlatOrder easily available for editing yet, or we need to fetch it.
+        // Actually, FlatOrder has machineName, but not ID.
+        // For now, let's leave it empty or try to find it from machines list if needed.
+        // But wait, the user wants to set it on CREATION.
+        // If editing, we might want to show the assigned machine.
+        // Let's just default to empty for now on edit, as assignment is usually done via drag/drop or specific assign action.
+        // BUT, if we want to change the "preferred" machine for a new order, we need it.
         targetCycleTime: editingOrder.targetCycleTime ? String(editingOrder.targetCycleTime) : '',
         targetUtilization: editingOrder.targetUtilization
           ? String(editingOrder.targetUtilization)
@@ -130,6 +151,7 @@ export function OrdersPage() {
         partNumber: '',
         quantityRequired: '',
         status: 'pending',
+        machineId: '',
         targetCycleTime: '',
         targetUtilization: '',
         dueDate: '',
@@ -157,6 +179,7 @@ export function OrdersPage() {
             orderNumber: data.orderNumber,
             partNumber: data.partNumber,
             quantityRequired: Number(data.quantityRequired),
+            machineId: data.machineId ? Number(data.machineId) : undefined,
             targetCycleTime: data.targetCycleTime ? Number(data.targetCycleTime) : undefined,
             targetUtilization: data.targetUtilization ? Number(data.targetUtilization) : undefined,
             dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
@@ -493,7 +516,14 @@ export function OrdersPage() {
                     <select
                       id="partNumber"
                       value={form.partNumber}
-                      onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
+                      onChange={(e) => {
+                        const part = parts.find((p) => p.partNumber === e.target.value);
+                        setForm((f) => ({
+                          ...f,
+                          partNumber: e.target.value,
+                          machineId: part?.defaultMachineId ? String(part.defaultMachineId) : '',
+                        }));
+                      }}
                       className="w-full h-9 rounded border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                       required
                     >
@@ -501,6 +531,27 @@ export function OrdersPage() {
                       {parts.map((p) => (
                         <option key={p.partNumber} value={p.partNumber}>
                           {p.partNumber} - {p.partName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="machineId"
+                      className="block text-sm font-medium text-slate-600 mb-1"
+                    >
+                      Preferred Machine
+                    </label>
+                    <select
+                      id="machineId"
+                      value={form.machineId}
+                      onChange={(e) => setForm((f) => ({ ...f, machineId: e.target.value }))}
+                      className="w-full h-9 rounded border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                    >
+                      <option value="">Auto-assign / None</option>
+                      {machines.map((m) => (
+                        <option key={m.machineId} value={m.machineId}>
+                          {m.machineName}
                         </option>
                       ))}
                     </select>

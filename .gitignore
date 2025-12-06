@@ -118,3 +118,4 @@ temp/
 *.pem
 packages/web/test-results/.last-run.json
 packages/web/playwright-report/index.html
+packages/api/api_log.txt

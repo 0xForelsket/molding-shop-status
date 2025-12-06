@@ -513,3 +513,27 @@ Started development server: http://localhost:3000
 <-- GET /api/machines
 --> GET /api/summary [32m200[0m 1ms
 --> GET /api/machines [32m200[0m 1ms
+<-- GET /api/summary
+<-- GET /api/machines
+--> GET /api/summary [32m200[0m 1ms
+--> GET /api/machines [32m200[0m 1ms
+<-- GET /api/summary
+<-- GET /api/machines
+--> GET /api/summary [32m200[0m 1ms
+--> GET /api/machines [32m200[0m 1ms
+<-- GET /api/summary
+<-- GET /api/machines
+--> GET /api/summary [32m200[0m 1ms
+--> GET /api/machines [32m200[0m 1ms
+<-- GET /api/summary
+<-- GET /api/machines
+--> GET /api/summary [32m200[0m 2ms
+--> GET /api/machines [32m200[0m 1ms
+<-- GET /api/summary
+<-- GET /api/machines
+--> GET /api/summary [32m200[0m 1ms
+--> GET /api/machines [32m200[0m 2ms
+<-- GET /api/summary
+<-- GET /api/machines
+--> GET /api/summary [32m200[0m 1ms
+--> GET /api/machines [32m200[0m 1ms

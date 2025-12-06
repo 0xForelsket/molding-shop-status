@@ -15,6 +15,20 @@
       "when": 1765023834668,
       "tag": "0001_volatile_carmella_unuscione",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1765025285574,
+      "tag": "0002_bumpy_chamber",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1765025416353,
+      "tag": "0003_slippery_wallow",
+      "breakpoints": true
     }
   ]
 }

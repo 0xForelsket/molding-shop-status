@@ -58,6 +58,7 @@ export const parts = pgTable('parts', {
   partNumber: text('part_number').primaryKey(),
   partName: text('part_name').notNull(),
   productLine: text('product_line'),
+  defaultMachineId: integer('default_machine_id').references(() => machines.machineId),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -86,7 +87,12 @@ export const productionOrders = pgTable('production_orders', {
   quantityCompleted: integer('quantity_completed').default(0),
   machineId: integer('machine_id').references(() => machines.machineId),
   status: text('status').default('pending'), // 'pending', 'assigned', 'running', 'completed', 'cancelled'
+
+  // Planning Fields
+  targetCycleTime: real('target_cycle_time'), // Override machine default
+  targetUtilization: integer('target_utilization'), // e.g. 90%
   dueDate: timestamp('due_date'),
+  notes: text('notes'),
   startedAt: timestamp('started_at'),
   completedAt: timestamp('completed_at'),
   createdAt: timestamp('created_at').defaultNow(),
