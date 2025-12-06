@@ -27,11 +27,9 @@ function formatLastSeen(seconds: number | null): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
-function calculateAverageCycleTime(machine: Machine): string {
+function formatCycleTime(machine: Machine): string {
   if (machine.targetCycleTime) {
-    const variance = (Math.random() - 0.5) * 0.2;
-    const actual = machine.targetCycleTime * (1 + variance);
-    return actual.toFixed(1);
+    return machine.targetCycleTime.toFixed(1);
   }
   return '--';
 }
@@ -41,7 +39,7 @@ function calculateOEE(machine: Machine): number {
   if (machine.status === 'idle') return 25;
 
   if (machine.targetCycleTime) {
-    const actualCycleTime = Number.parseFloat(calculateAverageCycleTime(machine));
+    const actualCycleTime = machine.targetCycleTime;
     if (!Number.isNaN(actualCycleTime)) {
       const performance = Math.min(machine.targetCycleTime / actualCycleTime, 1);
       return Math.round(0.95 * performance * 0.99 * 100);
@@ -59,7 +57,7 @@ function getOEEColor(oee: number): string {
 
 export function MachineCard({ machine }: { machine: Machine }) {
   const oee = calculateOEE(machine);
-  const cycleTime = calculateAverageCycleTime(machine);
+  const cycleTime = formatCycleTime(machine);
 
   return (
     <div
@@ -106,14 +104,7 @@ export function MachineCard({ machine }: { machine: Machine }) {
         {/* Cycle Time */}
         <div>
           <div className="text-xs text-slate-500 uppercase tracking-wide">Cycle Time</div>
-          <div className="font-bold text-slate-900 tabular-nums">
-            {cycleTime}s
-            {machine.targetCycleTime && (
-              <span className="text-xs text-slate-400 font-normal ml-1">
-                (Target {machine.targetCycleTime}s)
-              </span>
-            )}
-          </div>
+          <div className="font-bold text-slate-900 tabular-nums">{cycleTime}s</div>
         </div>
 
         {/* OEE */}
