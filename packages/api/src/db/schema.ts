@@ -105,6 +105,12 @@ export const shifts = pgTable('shifts', {
   name: text('name').notNull(),
   startTime: text('start_time').notNull(),
   endTime: text('end_time').notNull(),
+
+  // Planned break configuration
+  breakStartTime: text('break_start_time'), // e.g., '12:00' for day shift lunch
+  breakEndTime: text('break_end_time'), // e.g., '12:30'
+  breakDurationMinutes: integer('break_duration_minutes').default(30),
+
   isActive: boolean('is_active').default(true),
 });
 

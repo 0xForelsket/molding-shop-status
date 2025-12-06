@@ -1,9 +1,25 @@
 // Seed data for shifts, downtime reasons, product lines, and users
 
-// Shifts - Day and Night only
+// Shifts - Day and Night only, with planned breaks
 export const shiftSeeds = [
-  { id: 1, name: 'Day Shift', startTime: '06:00', endTime: '18:00' },
-  { id: 2, name: 'Night Shift', startTime: '18:00', endTime: '06:00' },
+  {
+    id: 1,
+    name: 'Day Shift',
+    startTime: '06:00',
+    endTime: '18:00',
+    breakStartTime: '12:00',
+    breakEndTime: '12:30',
+    breakDurationMinutes: 30,
+  },
+  {
+    id: 2,
+    name: 'Night Shift',
+    startTime: '18:00',
+    endTime: '06:00',
+    breakStartTime: '00:00',
+    breakEndTime: '00:30',
+    breakDurationMinutes: 30,
+  },
 ];
 
 // Downtime Reasons - categorized for reporting
