@@ -22,6 +22,7 @@ import {
   shiftSeeds,
   userSeeds,
 } from './reference-data';
+import { seedScrapReasons } from './scrap-reasons';
 
 async function seed() {
   console.log('🌱 Seeding database...\n');
@@ -99,6 +100,9 @@ async function seed() {
     await db.insert(machineParts).values(mp).onConflictDoNothing();
   }
   console.log(`    ✓ ${machinePartSeeds.length} machine-part mappings`);
+
+  // Seed scrap reasons
+  await seedScrapReasons();
 
   console.log('\n✅ Seeding complete!');
   process.exit(0);
