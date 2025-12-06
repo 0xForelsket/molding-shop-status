@@ -1,6 +1,7 @@
 // packages/web/src/components/ShiftTimeline.tsx
-// 4-day shift timeline with production log indicators
+// Redesigned with a cleaner 7-day view and industrial aesthetic
 
+import { ChevronRight } from 'lucide-react';
 import { useMemo } from 'react';
 
 interface Shift {
@@ -31,11 +32,11 @@ export function ShiftTimeline({
   selectedShiftId,
   onSelect,
 }: ShiftTimelineProps) {
-  // Generate last 4 days
+  // Generate last 7 days
   const days = useMemo(() => {
     const result = [];
     const today = new Date();
-    for (let i = 3; i >= 0; i--) {
+    for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       result.push(date);
@@ -82,66 +83,98 @@ export function ShiftTimeline({
     return currentTime >= start && currentTime < end;
   };
 
-  return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-      <div className="flex justify-between gap-2">
-        {days.map((date) => (
-          <div key={date.toISOString()} className="flex-1">
-            <div className="text-xs font-medium text-slate-500 text-center mb-2">
-              {formatDayLabel(date)}
-            </div>
-            <div className="flex gap-1">
-              {shifts.map((shift) => {
-                const shiftLogs = getLogsForShift(date, shift.id);
-                const hasLogs = shiftLogs.length > 0;
-                const totalProduced = shiftLogs.reduce(
-                  (sum, l) => sum + (l.quantityProduced || 0),
-                  0
-                );
-                const selected = isSelected(date, shift.id);
-                const isCurrent = isCurrentShift(date, shift);
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+  };
 
-                return (
-                  <button
-                    key={shift.id}
-                    type="button"
-                    onClick={() => onSelect(date, shift.id)}
-                    className={`flex-1 p-2 rounded text-center transition-all relative ${
-                      selected
-                        ? 'bg-indigo-100 ring-2 ring-indigo-400'
-                        : isCurrent
-                          ? 'bg-emerald-50 border-2 border-emerald-300'
-                          : 'bg-slate-50 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="text-xs font-medium text-slate-700">
-                      {shift.name.split(' ')[0]}
-                    </div>
-                    {hasLogs ? (
-                      <div className="mt-1 flex justify-center gap-0.5">
-                        {shiftLogs.slice(0, 3).map((log, i) => (
-                          <span
-                            key={`dot-${i}-${log.quantityProduced}`}
-                            className="w-1.5 h-1.5 rounded-full bg-emerald-500"
-                          />
-                        ))}
-                        {shiftLogs.length > 3 && <span className="text-xs text-slate-400">+</span>}
+  return (
+    <div className="mb-6 overflow-x-auto pb-2">
+      <div className="flex items-center gap-2 min-w-max">
+        {days.map((date, dayIndex) => (
+          <div key={date.toISOString()} className="flex items-center">
+            <div
+              className={`rounded-lg overflow-hidden border transition-all ${
+                isToday(date)
+                  ? 'bg-white border-blue-400 shadow-md shadow-blue-100'
+                  : 'bg-white border-slate-200'
+              }`}
+            >
+              {/* Day Header */}
+              <div
+                className={`px-3 py-1.5 text-center border-b ${
+                  isToday(date) ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-bold uppercase tracking-wider ${
+                    isToday(date) ? 'text-blue-700' : 'text-slate-500'
+                  }`}
+                >
+                  {formatDayLabel(date)}
+                </div>
+              </div>
+
+              {/* Shifts */}
+              <div className="flex divide-x divide-slate-100">
+                {shifts.map((shift) => {
+                  const shiftLogs = getLogsForShift(date, shift.id);
+                  const hasLogs = shiftLogs.length > 0;
+                  const totalProduced = shiftLogs.reduce(
+                    (sum, l) => sum + (l.quantityProduced || 0),
+                    0
+                  );
+                  const selected = isSelected(date, shift.id);
+                  const isCurrent = isCurrentShift(date, shift);
+
+                  return (
+                    <button
+                      key={shift.id}
+                      type="button"
+                      onClick={() => onSelect(date, shift.id)}
+                      className={`
+                        relative px-3 py-2 min-w-[70px] transition-all hover:bg-slate-50
+                        ${selected ? 'bg-blue-50 ring-inset ring-2 ring-blue-500 z-10' : ''}
+                      `}
+                    >
+                      <div className="text-[10px] font-bold text-slate-700 mb-1">
+                        {shift.name.split(' ')[0]}
                       </div>
-                    ) : (
-                      <div className="mt-1 h-2 text-xs text-slate-300">—</div>
-                    )}
-                    {hasLogs && (
-                      <div className="text-xs text-slate-500 mt-1">
-                        {totalProduced.toLocaleString()}
-                      </div>
-                    )}
-                    {isCurrent && (
-                      <div className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                    )}
-                  </button>
-                );
-              })}
+
+                      {hasLogs ? (
+                        <>
+                          <div className="flex justify-center gap-0.5 mb-0.5">
+                            {shiftLogs.slice(0, 3).map((_, i) => (
+                              <span
+                                key={`dot-${shift.id}-${i}`}
+                                className="w-1 h-1 rounded-full bg-emerald-500"
+                              />
+                            ))}
+                            {shiftLogs.length > 3 && (
+                              <span className="text-[8px] text-slate-400">+</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] font-medium text-slate-600">
+                            {totalProduced.toLocaleString()}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-[10px] text-slate-300 py-1">—</div>
+                      )}
+
+                      {isCurrent && (
+                        <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Arrow between days */}
+            {dayIndex < days.length - 1 && (
+              <ChevronRight className="w-3 h-3 text-slate-300 mx-1 flex-shrink-0" />
+            )}
           </div>
         ))}
       </div>
