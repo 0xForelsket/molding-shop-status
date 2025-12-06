@@ -6,7 +6,15 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { downtimeReasons, machineParts, machines, parts, productLines, shifts } from '../db/schema';
+import {
+  downtimeReasons,
+  machineParts,
+  machines,
+  parts,
+  productLines,
+  shiftBreaks,
+  shifts,
+} from '../db/schema';
 import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const referenceRoutes = new Hono();
@@ -258,5 +266,66 @@ referenceRoutes.post(
     await db.insert(productLines).values(data).onConflictDoNothing();
 
     return c.json({ success: true, code: data.code });
+  }
+);
+
+// ============== SHIFT BREAKS ==============
+
+referenceRoutes.get('/shift-breaks', async (c) => {
+  const breaks = await db
+    .select()
+    .from(shiftBreaks)
+    .orderBy(shiftBreaks.shiftId, shiftBreaks.startTime);
+  return c.json(breaks);
+});
+
+const shiftBreakSchema = z.object({
+  shiftId: z.number(),
+  name: z.string().min(1),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  durationMinutes: z.number().min(1),
+  isActive: z.boolean().default(true),
+});
+
+referenceRoutes.post(
+  '/shift-breaks',
+  jwtAuth,
+  requireRole('admin', 'line_leader'),
+  zValidator('json', shiftBreakSchema),
+  async (c) => {
+    const data = c.req.valid('json');
+
+    const result = await db.insert(shiftBreaks).values(data).returning();
+
+    return c.json({ success: true, id: result[0].id });
+  }
+);
+
+referenceRoutes.patch(
+  '/shift-breaks/:id',
+  jwtAuth,
+  requireRole('admin', 'line_leader'),
+  zValidator('json', shiftBreakSchema.partial()),
+  async (c) => {
+    const id = Number.parseInt(c.req.param('id'));
+    const updates = c.req.valid('json');
+
+    await db.update(shiftBreaks).set(updates).where(eq(shiftBreaks.id, id));
+
+    return c.json({ success: true });
+  }
+);
+
+referenceRoutes.delete(
+  '/shift-breaks/:id',
+  jwtAuth,
+  requireRole('admin', 'line_leader'),
+  async (c) => {
+    const id = Number.parseInt(c.req.param('id'));
+
+    await db.delete(shiftBreaks).where(eq(shiftBreaks.id, id));
+
+    return c.json({ success: true });
   }
 );

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { AppLayout, type Page } from './components/AppLayout';
 import { Dashboard } from './components/Dashboard';
 import { MachinesPage } from './components/MachinesPage';
+import { MasterDataPage } from './components/MasterDataPage';
 import { OrdersPage } from './components/OrdersPage';
 import { PartsPage } from './components/PartsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -33,6 +34,7 @@ export default function App() {
             {page === 'parts' && <PartsPage />}
             {page === 'orders' && <OrdersPage />}
             {page === 'machines' && <MachinesPage />}
+            {page === 'masterdata' && <MasterDataPage />}
           </AppLayout>
         </ProtectedRoute>
       </AuthProvider>
