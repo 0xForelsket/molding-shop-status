@@ -8,12 +8,19 @@ import {
   machines,
   parts,
   productLines,
+  shiftBreaks,
   shifts,
   users,
 } from '../schema';
 import { machineSeeds } from './machines';
 import { machinePartSeeds, partSeeds } from './parts';
-import { downtimeReasonSeeds, productLineSeeds, shiftSeeds, userSeeds } from './reference-data';
+import {
+  downtimeReasonSeeds,
+  productLineSeeds,
+  shiftBreakSeeds,
+  shiftSeeds,
+  userSeeds,
+} from './reference-data';
 
 async function seed() {
   console.log('🌱 Seeding database...\n');
@@ -30,13 +37,17 @@ async function seed() {
           name: shift.name,
           startTime: shift.startTime,
           endTime: shift.endTime,
-          breakStartTime: shift.breakStartTime,
-          breakEndTime: shift.breakEndTime,
-          breakDurationMinutes: shift.breakDurationMinutes,
         },
       });
   }
   console.log(`    ✓ ${shiftSeeds.length} shifts`);
+
+  // Seed shift breaks
+  console.log('  → Inserting shift breaks...');
+  for (const brk of shiftBreakSeeds) {
+    await db.insert(shiftBreaks).values(brk).onConflictDoNothing();
+  }
+  console.log(`    ✓ ${shiftBreakSeeds.length} shift breaks`);
 
   // Seed downtime reasons
   console.log('  → Inserting downtime reasons...');

@@ -105,12 +105,20 @@ export const shifts = pgTable('shifts', {
   name: text('name').notNull(),
   startTime: text('start_time').notNull(),
   endTime: text('end_time').notNull(),
+  isActive: boolean('is_active').default(true),
+});
 
-  // Planned break configuration
-  breakStartTime: text('break_start_time'), // e.g., '12:00' for day shift lunch
-  breakEndTime: text('break_end_time'), // e.g., '12:30'
-  breakDurationMinutes: integer('break_duration_minutes').default(30),
+// ============== SHIFT BREAKS ==============
 
+export const shiftBreaks = pgTable('shift_breaks', {
+  id: serial('id').primaryKey(),
+  shiftId: integer('shift_id')
+    .notNull()
+    .references(() => shifts.id),
+  name: text('name').notNull(), // e.g., 'Lunch', 'Morning Break'
+  startTime: text('start_time').notNull(), // e.g., '12:30'
+  endTime: text('end_time').notNull(), // e.g., '13:30'
+  durationMinutes: integer('duration_minutes').notNull(),
   isActive: boolean('is_active').default(true),
 });
 
