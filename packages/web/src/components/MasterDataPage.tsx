@@ -1133,19 +1133,13 @@ interface CalendarDay {
 
 function PlantCalendarTab() {
   const queryClient = useQueryClient();
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [holidayName, setHolidayName] = useState('');
 
-  // Get calendar for current month view
-  const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
-    .toISOString()
-    .split('T')[0];
-  const endDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0)
-    .toISOString()
-    .split('T')[0];
+  // Get calendar for entire year
+  const startDate = `${currentYear}-01-01`;
+  const endDate = `${currentYear}-12-31`;
 
   const { data: calendarDays = [] } = useQuery<CalendarDay[]>({
     queryKey: ['plant-calendar', startDate, endDate],
@@ -1171,44 +1165,66 @@ function PlantCalendarTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plant-calendar'] });
       setSelectedDates(new Set());
+      setHolidayName('');
     },
   });
 
-  const getDaysInMonth = () => {
-    const days: { date: string; dayOfMonth: number; isCurrentMonth: boolean }[] = [];
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
+  // Build calendar map
+  const calendarMap = new Map(calendarDays.map((d) => [d.date, d]));
 
-    // First day of month and how many days
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
+  // Calculate stats
+  const workdays = calendarDays.filter((d) => d.dayType === 'working').length;
+  const freeDays = calendarDays.filter((d) => d.dayType !== 'working').length;
+  const holidays = calendarDays.filter((d) => d.dayType === 'holiday' && d.name);
 
-    // Pad start with previous month days
-    const startPadding = firstDay.getDay();
-    for (let i = startPadding - 1; i >= 0; i--) {
-      const d = new Date(year, month, -i);
-      days.push({
-        date: d.toISOString().split('T')[0],
-        dayOfMonth: d.getDate(),
-        isCurrentMonth: false,
-      });
+  // Generate weeks for the year (grouped by ISO week)
+  const generateYearWeeks = () => {
+    const weeks: {
+      weekNum: number;
+      days: { date: string; dayOfMonth: number; month: number }[];
+    }[] = [];
+    const startOfYear = new Date(currentYear, 0, 1);
+    const endOfYear = new Date(currentYear, 11, 31);
+
+    // Find first Sunday/Monday of the first week that contains Jan 1
+    const current = new Date(startOfYear);
+    const dayOfWeek = current.getDay();
+    // Go back to Sunday of that week
+    current.setDate(current.getDate() - dayOfWeek);
+
+    while (current <= endOfYear || weeks.length < 53) {
+      const weekDays: { date: string; dayOfMonth: number; month: number }[] = [];
+      const weekStart = new Date(current);
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        weekDays.push({
+          date: d.toISOString().split('T')[0],
+          dayOfMonth: d.getDate(),
+          month: d.getMonth(),
+        });
+      }
+
+      // Calculate ISO week number
+      const thursday = new Date(weekStart);
+      thursday.setDate(weekStart.getDate() + 4 - (weekStart.getDay() || 7));
+      const yearStart = new Date(thursday.getFullYear(), 0, 1);
+      const weekNum = Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+
+      // Only include weeks that have at least one day in the current year
+      if (weekDays.some((d) => d.date.startsWith(String(currentYear)))) {
+        weeks.push({ weekNum, days: weekDays });
+      }
+
+      current.setDate(current.getDate() + 7);
+      if (current > endOfYear && weeks.length >= 52) break;
     }
 
-    // Current month days
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      const d = new Date(year, month, i);
-      days.push({
-        date: d.toISOString().split('T')[0],
-        dayOfMonth: i,
-        isCurrentMonth: true,
-      });
-    }
-
-    return days;
+    return weeks;
   };
 
-  const calendarMap = new Map(calendarDays.map((d) => [d.date, d]));
-  const days = getDaysInMonth();
+  const weeks = generateYearWeeks();
 
   const toggleDate = (date: string) => {
     const newSet = new Set(selectedDates);
@@ -1225,133 +1241,254 @@ function PlantCalendarTab() {
     updateMutation.mutate({ dates: Array.from(selectedDates), dayType, name });
   };
 
-  const dayTypeColors: Record<string, string> = {
-    working: 'bg-emerald-100 text-emerald-800',
-    weekend: 'bg-slate-200 text-slate-600',
-    holiday: 'bg-red-100 text-red-800',
-    shutdown: 'bg-orange-100 text-orange-800',
-    special: 'bg-purple-100 text-purple-800',
+  // Color styles matching MES look
+  const getDayStyle = (dayType: string, isSelected: boolean, isCurrentYear: boolean) => {
+    const base = isSelected ? 'ring-2 ring-indigo-500 ring-offset-1' : '';
+    const opacity = isCurrentYear ? '' : 'opacity-30';
+
+    switch (dayType) {
+      case 'working':
+        return `bg-green-400 text-green-900 ${base} ${opacity}`;
+      case 'weekend':
+        return `bg-yellow-300 text-yellow-900 ${base} ${opacity}`;
+      case 'holiday':
+        return `bg-pink-400 text-pink-900 ${base} ${opacity}`;
+      case 'shutdown':
+        return `bg-orange-400 text-orange-900 ${base} ${opacity}`;
+      case 'special':
+        return `bg-purple-400 text-purple-900 ${base} ${opacity}`;
+      default:
+        return `bg-gray-200 ${base} ${opacity}`;
+    }
   };
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() =>
-              setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
-            }
-            className="px-3 py-1 border rounded hover:bg-slate-50"
-          >
-            ←
-          </button>
-          <h3 className="text-lg font-semibold">
-            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-          </h3>
-          <button
-            type="button"
-            onClick={() =>
-              setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
-            }
-            className="px-3 py-1 border rounded hover:bg-slate-50"
-          >
-            →
-          </button>
+      <div className="flex justify-between items-start">
+        <div>
+          <div className="flex items-center gap-4 mb-4">
+            <button
+              type="button"
+              onClick={() => setCurrentYear(currentYear - 1)}
+              className="px-3 py-1 bg-slate-200 hover:bg-slate-300 rounded font-medium"
+            >
+              ◀ Year
+            </button>
+            <h3 className="text-xl font-bold">Year Overview {currentYear}</h3>
+            <button
+              type="button"
+              onClick={() => setCurrentYear(currentYear + 1)}
+              className="px-3 py-1 bg-slate-200 hover:bg-slate-300 rounded font-medium"
+            >
+              Year ▶
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="bg-slate-100 border border-slate-300 p-3 rounded mb-4 inline-block">
+            <div className="text-sm font-semibold text-slate-600 mb-1">Yearly Overview</div>
+            <div className="grid grid-cols-2 gap-x-8 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-green-700 font-medium">Workdays:</span>
+                <span className="font-bold">{workdays}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-yellow-700 font-medium">Free Days:</span>
+                <span className="font-bold">{freeDays}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Actions */}
         {selectedDates.size > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-500">{selectedDates.size} selected</span>
-            <button
-              type="button"
-              onClick={() => applyDayType('working')}
-              className="px-3 py-1 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700"
-            >
-              Working
-            </button>
-            <button
-              type="button"
-              onClick={() => applyDayType('holiday', 'Holiday')}
-              className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700"
-            >
-              Holiday
-            </button>
-            <button
-              type="button"
-              onClick={() => applyDayType('shutdown', 'Shutdown')}
-              className="px-3 py-1 text-sm bg-orange-600 text-white rounded hover:bg-orange-700"
-            >
-              Shutdown
-            </button>
-            <button
-              type="button"
-              onClick={() => applyDayType('weekend')}
-              className="px-3 py-1 text-sm bg-slate-600 text-white rounded hover:bg-slate-700"
-            >
-              Weekend
-            </button>
+          <div className="bg-indigo-50 border border-indigo-200 p-3 rounded">
+            <div className="text-sm font-semibold text-indigo-800 mb-2">
+              {selectedDates.size} date(s) selected
+            </div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => applyDayType('working')}
+                className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+              >
+                Working
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDayType('weekend')}
+                className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600"
+              >
+                Weekend
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDayType('shutdown', 'Shutdown')}
+                className="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600"
+              >
+                Shutdown
+              </button>
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={holidayName}
+                onChange={(e) => setHolidayName(e.target.value)}
+                placeholder="Holiday name..."
+                className="px-2 py-1 text-xs border rounded flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => applyDayType('holiday', holidayName || 'Holiday')}
+                className="px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600"
+              >
+                Holiday
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setSelectedDates(new Set())}
-              className="px-2 py-1 text-slate-500 hover:text-slate-700"
+              className="mt-2 text-xs text-indigo-600 hover:underline"
             >
-              <X className="w-4 h-4" />
+              Clear selection
             </button>
           </div>
         )}
       </div>
 
-      {/* Legend */}
-      <div className="flex gap-4 text-xs">
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-emerald-100" /> Working
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-slate-200" /> Weekend
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-red-100" /> Holiday
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-orange-100" /> Shutdown
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-purple-100" /> Special
-        </span>
-      </div>
+      <div className="flex gap-6">
+        {/* Calendar Grid */}
+        <div className="flex-1 overflow-auto">
+          <div className="bg-slate-100 border border-slate-300 rounded">
+            {/* Header Row */}
+            <div className="grid grid-cols-[auto_repeat(7,1fr)] bg-slate-200 border-b border-slate-300">
+              <div className="px-2 py-1 text-xs font-bold text-slate-600 border-r border-slate-300 w-12 text-center">
+                WN
+              </div>
+              {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day, i) => (
+                <div
+                  key={day}
+                  className={`px-1 py-1 text-xs font-bold text-center ${
+                    i >= 5 ? 'text-yellow-700' : 'text-slate-600'
+                  }`}
+                >
+                  {day}
+                </div>
+              ))}
+            </div>
 
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-1">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-          <div key={day} className="text-center text-xs font-medium text-slate-500 py-2">
-            {day}
+            {/* Week Rows */}
+            <div className="max-h-[500px] overflow-y-auto">
+              {weeks.map((week, weekIndex) => {
+                // Check if this is the start of a new month
+                const firstDayOfWeek = week.days[0];
+                const showMonthLabel =
+                  weekIndex === 0 ||
+                  (firstDayOfWeek.dayOfMonth <= 7 &&
+                    firstDayOfWeek.date.startsWith(String(currentYear)));
+
+                return (
+                  <div key={`${week.weekNum}-${weekIndex}`}>
+                    {showMonthLabel && firstDayOfWeek.date.startsWith(String(currentYear)) && (
+                      <div className="bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-800 border-b border-slate-300">
+                        {currentYear}/{firstDayOfWeek.month + 1}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-[auto_repeat(7,1fr)] border-b border-slate-200 hover:bg-slate-50">
+                      <div className="px-2 py-0.5 text-xs font-medium text-slate-500 border-r border-slate-200 w-12 text-center bg-slate-50">
+                        {week.weekNum}
+                      </div>
+                      {week.days.map((day, dayIndex) => {
+                        const calDay = calendarMap.get(day.date);
+                        const isSelected = selectedDates.has(day.date);
+                        const dayType = calDay?.dayType || (dayIndex >= 5 ? 'weekend' : 'working');
+                        const isCurrentYear = day.date.startsWith(String(currentYear));
+
+                        return (
+                          <button
+                            type="button"
+                            key={day.date}
+                            onClick={() => isCurrentYear && toggleDate(day.date)}
+                            disabled={!isCurrentYear}
+                            className={`
+                              px-1 py-0.5 text-xs font-medium text-center transition-all
+                              ${getDayStyle(dayType, isSelected, isCurrentYear)}
+                              ${isCurrentYear ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}
+                            `}
+                            title={calDay?.name || day.date}
+                          >
+                            {day.dayOfMonth}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ))}
-        {days.map((day) => {
-          const calDay = calendarMap.get(day.date);
-          const isSelected = selectedDates.has(day.date);
-          const dayType = calDay?.dayType || 'working';
+        </div>
 
-          return (
-            <button
-              type="button"
-              key={day.date}
-              onClick={() => toggleDate(day.date)}
-              className={`
-                p-2 text-center rounded-lg border-2 transition-all
-                ${day.isCurrentMonth ? '' : 'opacity-40'}
-                ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-200' : 'border-transparent'}
-                ${dayTypeColors[dayType] || 'bg-white'}
-              `}
-            >
-              <div className="text-sm font-medium">{day.dayOfMonth}</div>
-              {calDay?.name && <div className="text-xs truncate">{calDay.name}</div>}
-            </button>
-          );
-        })}
+        {/* Public Holidays Sidebar */}
+        <div className="w-72 flex-shrink-0">
+          <div className="bg-slate-100 border border-slate-300 rounded">
+            <div className="bg-slate-200 px-3 py-2 border-b border-slate-300">
+              <span className="text-sm font-bold text-slate-700">Public Holidays</span>
+            </div>
+            <div className="max-h-[500px] overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-2 py-1 text-left font-semibold text-slate-600">Date</th>
+                    <th className="px-2 py-1 text-left font-semibold text-slate-600">
+                      Explanation
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {holidays.length > 0 ? (
+                    holidays.map((h) => (
+                      <tr key={h.date} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="px-2 py-1 font-medium text-slate-700">{h.date}</td>
+                        <td className="px-2 py-1 text-slate-600">{h.name}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={2} className="px-2 py-4 text-center text-slate-400">
+                        No holidays defined
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="mt-4 bg-slate-100 border border-slate-300 rounded p-3">
+            <div className="text-xs font-semibold text-slate-600 mb-2">Legend</div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 bg-green-400 rounded" />
+                <span>Working</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 bg-yellow-300 rounded" />
+                <span>Weekend</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 bg-pink-400 rounded" />
+                <span>Holiday</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 bg-orange-400 rounded" />
+                <span>Shutdown</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
