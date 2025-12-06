@@ -2,16 +2,16 @@
   "name": "api",
   "version": "1.0.0",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
+    "dev": "bun --env-file=../../.env --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun run dist/index.js",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "bun --env-file=../../.env drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "bun run src/db/seeds/run.ts"
+    "db:seed": "bun --env-file=../../.env run src/db/seeds/run.ts"
   },
   "dependencies": {
     "hono": "^4.6.0",
