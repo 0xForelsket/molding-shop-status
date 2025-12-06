@@ -3,14 +3,14 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db';
-import { downtimeLogs, downtimeReasons, machines, shifts } from '../db/schema';
+import { downtimeLogs, downtimeReasons, machines, shiftInstances, shifts } from '../db/schema';
 
 const app = new Hono();
 
 // GET /downtime - Get downtime logs with optional filters
 app.get('/', async (c) => {
   const machineId = c.req.query('machineId');
-  const shiftDate = c.req.query('shiftDate');
+  const productionDate = c.req.query('productionDate');
 
   let query = db
     .select({
@@ -24,6 +24,10 @@ app.get('/', async (c) => {
         machineId: machines.machineId,
         machineName: machines.machineName,
       },
+      shiftInstance: {
+        id: shiftInstances.id,
+        productionDate: shiftInstances.productionDate,
+      },
       shift: {
         name: shifts.name,
       },
@@ -31,7 +35,8 @@ app.get('/', async (c) => {
     .from(downtimeLogs)
     .leftJoin(downtimeReasons, eq(downtimeLogs.reasonCode, downtimeReasons.code))
     .leftJoin(machines, eq(downtimeLogs.machineId, machines.machineId))
-    .leftJoin(shifts, eq(downtimeLogs.shiftId, shifts.id));
+    .leftJoin(shiftInstances, eq(downtimeLogs.shiftInstanceId, shiftInstances.id))
+    .leftJoin(shifts, eq(shiftInstances.shiftTemplateId, shifts.id));
 
   const conditions = [];
 
@@ -39,8 +44,8 @@ app.get('/', async (c) => {
     conditions.push(eq(downtimeLogs.machineId, Number.parseInt(machineId)));
   }
 
-  if (shiftDate) {
-    conditions.push(sql`DATE(${downtimeLogs.startedAt}) = ${shiftDate}`);
+  if (productionDate) {
+    conditions.push(sql`DATE(${shiftInstances.productionDate}) = ${productionDate}`);
   }
 
   if (conditions.length > 0) {
@@ -55,7 +60,8 @@ app.get('/', async (c) => {
 app.post('/', async (c) => {
   const body = await c.req.json();
 
-  const { machineId, reasonCode, shiftId, notes, startedAt, endedAt, durationMinutes } = body;
+  const { machineId, reasonCode, shiftInstanceId, notes, startedAt, endedAt, durationMinutes } =
+    body;
 
   // Validate required fields
   if (!machineId || !reasonCode) {
@@ -75,7 +81,7 @@ app.post('/', async (c) => {
     .values({
       machineId,
       reasonCode,
-      shiftId: shiftId || null,
+      shiftInstanceId: shiftInstanceId || null,
       notes: notes || null,
       startedAt: startedAt ? new Date(startedAt) : new Date(),
       endedAt: endedAt ? new Date(endedAt) : null,
@@ -135,7 +141,7 @@ app.delete('/:id', async (c) => {
 // GET /downtime/summary - Get downtime summary by reason
 app.get('/summary', async (c) => {
   const machineId = c.req.query('machineId');
-  const shiftDate = c.req.query('shiftDate');
+  const productionDate = c.req.query('productionDate');
 
   const conditions = [];
 
@@ -143,8 +149,8 @@ app.get('/summary', async (c) => {
     conditions.push(eq(downtimeLogs.machineId, Number.parseInt(machineId)));
   }
 
-  if (shiftDate) {
-    conditions.push(sql`DATE(${downtimeLogs.startedAt}) = ${shiftDate}`);
+  if (productionDate) {
+    conditions.push(sql`DATE(${shiftInstances.productionDate}) = ${productionDate}`);
   }
 
   let query = db
@@ -156,7 +162,8 @@ app.get('/summary', async (c) => {
       count: sql<number>`COUNT(*)`,
     })
     .from(downtimeLogs)
-    .leftJoin(downtimeReasons, eq(downtimeLogs.reasonCode, downtimeReasons.code));
+    .leftJoin(downtimeReasons, eq(downtimeLogs.reasonCode, downtimeReasons.code))
+    .leftJoin(shiftInstances, eq(downtimeLogs.shiftInstanceId, shiftInstances.id));
 
   if (conditions.length > 0) {
     query = query.where(and(...conditions)) as typeof query;

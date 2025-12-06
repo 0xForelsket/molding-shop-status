@@ -3,14 +3,21 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db';
-import { machines, parts, productionLogs, productionOrders, shifts } from '../db/schema';
+import {
+  machines,
+  parts,
+  productionLogs,
+  productionOrders,
+  shiftInstances,
+  shifts,
+} from '../db/schema';
 
 const app = new Hono();
 
 // GET /production-logs - Get production logs with optional filters
 app.get('/', async (c) => {
   const machineId = c.req.query('machineId');
-  const shiftDate = c.req.query('shiftDate');
+  const productionDate = c.req.query('productionDate');
   const orderNumber = c.req.query('orderNumber');
 
   let query = db
@@ -28,6 +35,10 @@ app.get('/', async (c) => {
       part: {
         partName: parts.partName,
       },
+      shiftInstance: {
+        id: shiftInstances.id,
+        productionDate: shiftInstances.productionDate,
+      },
       shift: {
         name: shifts.name,
       },
@@ -36,7 +47,8 @@ app.get('/', async (c) => {
     .leftJoin(machines, eq(productionLogs.machineId, machines.machineId))
     .leftJoin(productionOrders, eq(productionLogs.orderNumber, productionOrders.orderNumber))
     .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
-    .leftJoin(shifts, eq(productionLogs.shiftId, shifts.id));
+    .leftJoin(shiftInstances, eq(productionLogs.shiftInstanceId, shiftInstances.id))
+    .leftJoin(shifts, eq(shiftInstances.shiftTemplateId, shifts.id));
 
   const conditions = [];
 
@@ -44,8 +56,8 @@ app.get('/', async (c) => {
     conditions.push(eq(productionLogs.machineId, Number.parseInt(machineId)));
   }
 
-  if (shiftDate) {
-    conditions.push(sql`DATE(${productionLogs.shiftDate}) = ${shiftDate}`);
+  if (productionDate) {
+    conditions.push(sql`DATE(${shiftInstances.productionDate}) = ${productionDate}`);
   }
 
   if (orderNumber) {
@@ -67,8 +79,7 @@ app.post('/', async (c) => {
   const {
     machineId,
     orderNumber,
-    shiftId,
-    shiftDate,
+    shiftInstanceId,
     quantityProduced = 0,
     quantityScrap = 0,
     startedAt,
@@ -79,8 +90,18 @@ app.post('/', async (c) => {
   } = body;
 
   // Validate required fields
-  if (!machineId || !orderNumber || !shiftId || !shiftDate) {
-    return c.json({ error: 'machineId, orderNumber, shiftId, and shiftDate are required' }, 400);
+  if (!machineId || !orderNumber || !shiftInstanceId) {
+    return c.json({ error: 'machineId, orderNumber, and shiftInstanceId are required' }, 400);
+  }
+
+  // Verify shiftInstanceId exists
+  const [shiftInstance] = await db
+    .select()
+    .from(shiftInstances)
+    .where(eq(shiftInstances.id, shiftInstanceId));
+
+  if (!shiftInstance) {
+    return c.json({ error: 'Invalid shiftInstanceId' }, 400);
   }
 
   // Create the log
@@ -89,8 +110,7 @@ app.post('/', async (c) => {
     .values({
       machineId,
       orderNumber,
-      shiftId,
-      shiftDate: new Date(shiftDate),
+      shiftInstanceId,
       quantityProduced,
       quantityScrap,
       startedAt: startedAt ? new Date(startedAt) : null,
@@ -190,7 +210,8 @@ app.get('/today-summary', async (c) => {
       totalScrap: sql<number>`SUM(${productionLogs.quantityScrap})`,
     })
     .from(productionLogs)
-    .where(sql`DATE(${productionLogs.shiftDate}) = ${today}`)
+    .leftJoin(shiftInstances, eq(productionLogs.shiftInstanceId, shiftInstances.id))
+    .where(sql`DATE(${shiftInstances.productionDate}) = ${today}`)
     .groupBy(productionLogs.machineId);
 
   return c.json(summary);
