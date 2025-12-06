@@ -152,7 +152,6 @@ export async function ensureShiftSchedule(lookaheadDays = 42) {
               name: brk.name,
               startTime: breakStartAt,
               endTime: breakEndAt,
-              durationMinutes: brk.durationMinutes,
             });
           }
         }

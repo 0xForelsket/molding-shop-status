@@ -116,9 +116,9 @@ export const shiftBreaks = pgTable('shift_breaks', {
     .notNull()
     .references(() => shifts.id),
   name: text('name').notNull(), // e.g., 'Lunch', 'Morning Break'
-  startTime: text('start_time').notNull(), // e.g., '12:30'
-  endTime: text('end_time').notNull(), // e.g., '13:30'
-  durationMinutes: integer('duration_minutes').notNull(),
+  startTime: text('start_time').notNull(), // e.g., '12:30' (time of day)
+  endTime: text('end_time').notNull(), // e.g., '13:30' (time of day)
+  // Duration is auto-calculated from start/end times
   isActive: boolean('is_active').default(true),
 });
 
@@ -162,7 +162,7 @@ export const shiftInstanceBreaks = pgTable('shift_instance_breaks', {
   name: text('name').notNull(),
   startTime: timestamp('start_time').notNull(),
   endTime: timestamp('end_time').notNull(),
-  durationMinutes: integer('duration_minutes').notNull(),
+  // Duration is auto-calculated from start/end times
 });
 
 // ============== DOWNTIME REASONS ==============

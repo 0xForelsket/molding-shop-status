@@ -31,7 +31,7 @@ interface ShiftBreak {
   name: string;
   startTime: string;
   endTime: string;
-  durationMinutes: number;
+  // Duration is auto-calculated from start/end times
   isActive: boolean;
 }
 
@@ -46,6 +46,19 @@ interface ProductLine {
   code: string;
   name: string;
   isActive: boolean;
+}
+
+// Helper: Calculate duration in minutes from time strings
+function calculateDurationFromTimes(startTime: string, endTime: string): number {
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+  const startMins = startH * 60 + startM;
+  let endMins = endH * 60 + endM;
+  // Handle overnight (e.g., 23:00 to 00:30)
+  if (endMins < startMins) {
+    endMins += 24 * 60;
+  }
+  return endMins - startMins;
 }
 
 // Tab Button Component
@@ -396,7 +409,11 @@ function ShiftsTab() {
             { key: 'name', label: 'Break Name' },
             { key: 'startTime', label: 'Start' },
             { key: 'endTime', label: 'End' },
-            { key: 'durationMinutes', label: 'Duration', render: (v) => `${v} min` },
+            {
+              key: 'startTime',
+              label: 'Duration',
+              render: (_v, row) => `${calculateDurationFromTimes(row.startTime, row.endTime)} min`,
+            },
           ]}
           onEdit={(b) => setEditingBreak(b)}
           onDelete={(b) => setDeleteConfirm({ type: 'break', id: b.id })}
@@ -581,7 +598,7 @@ function BreakForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ id: brk?.id, shiftId, name, startTime, endTime, durationMinutes });
+    onSave({ id: brk?.id, shiftId, name, startTime, endTime });
   };
 
   return (

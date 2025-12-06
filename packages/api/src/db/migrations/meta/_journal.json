@@ -57,6 +57,13 @@
       "when": 1765048531588,
       "tag": "0007_grey_joshua_kane",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1765049264889,
+      "tag": "0008_thin_captain_universe",
+      "breakpoints": true
     }
   ]
 }

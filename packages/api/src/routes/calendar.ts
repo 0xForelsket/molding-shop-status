@@ -211,7 +211,6 @@ calendarRoutes.post(
         name: brk.name,
         startTime: breakStart,
         endTime: breakEnd,
-        durationMinutes: brk.durationMinutes,
       });
     }
 

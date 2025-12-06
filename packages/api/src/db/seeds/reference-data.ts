@@ -6,12 +6,12 @@ export const shiftSeeds = [
   { id: 2, name: 'Night Shift', startTime: '20:00', endTime: '08:00' },
 ];
 
-// Shift Breaks - supports multiple breaks per shift
+// Shift Breaks - supports multiple breaks per shift (duration auto-calculated)
 export const shiftBreakSeeds = [
   // Day shift break
-  { shiftId: 1, name: 'Lunch Break', startTime: '12:30', endTime: '13:30', durationMinutes: 60 },
+  { shiftId: 1, name: 'Lunch Break', startTime: '12:30', endTime: '13:30' },
   // Night shift break
-  { shiftId: 2, name: 'Lunch Break', startTime: '03:00', endTime: '04:00', durationMinutes: 60 },
+  { shiftId: 2, name: 'Lunch Break', startTime: '03:00', endTime: '04:00' },
 ];
 
 // Downtime Reasons - categorized for reporting
