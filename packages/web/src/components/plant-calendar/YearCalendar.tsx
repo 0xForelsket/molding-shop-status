@@ -130,9 +130,17 @@ function MonthCalendar({
       {/* Days Header */}
       <div className="grid grid-cols-[2rem_repeat(7,1fr)] bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500">
         <div className="py-1 text-center border-r border-slate-200 bg-slate-100">W</div>
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-          <div key={d} className={cn('py-1 text-center', i >= 5 && 'text-amber-600')}>
-            {d}
+        {[
+          { key: 'mon', label: 'M' },
+          { key: 'tue', label: 'T' },
+          { key: 'wed', label: 'W' },
+          { key: 'thu', label: 'T' },
+          { key: 'fri', label: 'F' },
+          { key: 'sat', label: 'S' },
+          { key: 'sun', label: 'S' },
+        ].map((d, i) => (
+          <div key={d.key} className={cn('py-1 text-center', i >= 5 && 'text-amber-600')}>
+            {d.label}
           </div>
         ))}
       </div>

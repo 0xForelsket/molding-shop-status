@@ -31,13 +31,19 @@ export function PlantCalendarTab() {
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to update');
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(error.error || `Failed to update (${res.status})`);
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plant-calendar'] });
       setSelectedDates(new Set());
       setHolidayName('');
+    },
+    onError: (error: Error) => {
+      alert(`Failed to update calendar: ${error.message}`);
     },
   });
 
