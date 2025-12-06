@@ -1,12 +1,24 @@
 // packages/web/src/components/MasterDataPage.tsx
-// Master Data management page with tabs for Machines, Shifts, Downtime Reasons, Product Lines
+// Master Data management page with tabs for Machines, Shifts, Downtime Reasons, Product Lines, Calendar
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Clock, Cog, Database, Layers, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Calendar,
+  CalendarDays,
+  Clock,
+  Cog,
+  Database,
+  Layers,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import { getAuthHeader } from '../lib/auth';
 
-type Tab = 'machines' | 'shifts' | 'downtime' | 'productlines';
+type Tab = 'shifts' | 'downtime' | 'productlines' | 'machines' | 'plantcalendar' | 'shiftschedule';
 
 interface Machine {
   machineId: number;
@@ -1111,6 +1123,454 @@ function MachinesTab() {
   );
 }
 
+// =============== PLANT CALENDAR TAB ===============
+interface CalendarDay {
+  date: string;
+  dayType: string;
+  weekNum: number | null;
+  name: string | null;
+}
+
+function PlantCalendarTab() {
+  const queryClient = useQueryClient();
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+
+  // Get calendar for current month view
+  const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
+    .toISOString()
+    .split('T')[0];
+  const endDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0)
+    .toISOString()
+    .split('T')[0];
+
+  const { data: calendarDays = [] } = useQuery<CalendarDay[]>({
+    queryKey: ['plant-calendar', startDate, endDate],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/calendar/plant-calendar?startDate=${startDate}&endDate=${endDate}`
+      );
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { dates: string[]; dayType: string; name?: string }) => {
+      const res = await fetch('/api/calendar/plant-calendar/bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plant-calendar'] });
+      setSelectedDates(new Set());
+    },
+  });
+
+  const getDaysInMonth = () => {
+    const days: { date: string; dayOfMonth: number; isCurrentMonth: boolean }[] = [];
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+
+    // First day of month and how many days
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Pad start with previous month days
+    const startPadding = firstDay.getDay();
+    for (let i = startPadding - 1; i >= 0; i--) {
+      const d = new Date(year, month, -i);
+      days.push({
+        date: d.toISOString().split('T')[0],
+        dayOfMonth: d.getDate(),
+        isCurrentMonth: false,
+      });
+    }
+
+    // Current month days
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      const d = new Date(year, month, i);
+      days.push({
+        date: d.toISOString().split('T')[0],
+        dayOfMonth: i,
+        isCurrentMonth: true,
+      });
+    }
+
+    return days;
+  };
+
+  const calendarMap = new Map(calendarDays.map((d) => [d.date, d]));
+  const days = getDaysInMonth();
+
+  const toggleDate = (date: string) => {
+    const newSet = new Set(selectedDates);
+    if (newSet.has(date)) {
+      newSet.delete(date);
+    } else {
+      newSet.add(date);
+    }
+    setSelectedDates(newSet);
+  };
+
+  const applyDayType = (dayType: string, name?: string) => {
+    if (selectedDates.size === 0) return;
+    updateMutation.mutate({ dates: Array.from(selectedDates), dayType, name });
+  };
+
+  const dayTypeColors: Record<string, string> = {
+    working: 'bg-emerald-100 text-emerald-800',
+    weekend: 'bg-slate-200 text-slate-600',
+    holiday: 'bg-red-100 text-red-800',
+    shutdown: 'bg-orange-100 text-orange-800',
+    special: 'bg-purple-100 text-purple-800',
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
+            }
+            className="px-3 py-1 border rounded hover:bg-slate-50"
+          >
+            ←
+          </button>
+          <h3 className="text-lg font-semibold">
+            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+          </h3>
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+            }
+            className="px-3 py-1 border rounded hover:bg-slate-50"
+          >
+            →
+          </button>
+        </div>
+
+        {/* Actions */}
+        {selectedDates.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500">{selectedDates.size} selected</span>
+            <button
+              type="button"
+              onClick={() => applyDayType('working')}
+              className="px-3 py-1 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700"
+            >
+              Working
+            </button>
+            <button
+              type="button"
+              onClick={() => applyDayType('holiday', 'Holiday')}
+              className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Holiday
+            </button>
+            <button
+              type="button"
+              onClick={() => applyDayType('shutdown', 'Shutdown')}
+              className="px-3 py-1 text-sm bg-orange-600 text-white rounded hover:bg-orange-700"
+            >
+              Shutdown
+            </button>
+            <button
+              type="button"
+              onClick={() => applyDayType('weekend')}
+              className="px-3 py-1 text-sm bg-slate-600 text-white rounded hover:bg-slate-700"
+            >
+              Weekend
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDates(new Set())}
+              className="px-2 py-1 text-slate-500 hover:text-slate-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Legend */}
+      <div className="flex gap-4 text-xs">
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-emerald-100" /> Working
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-slate-200" /> Weekend
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-red-100" /> Holiday
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-orange-100" /> Shutdown
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-purple-100" /> Special
+        </span>
+      </div>
+
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-7 gap-1">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+          <div key={day} className="text-center text-xs font-medium text-slate-500 py-2">
+            {day}
+          </div>
+        ))}
+        {days.map((day) => {
+          const calDay = calendarMap.get(day.date);
+          const isSelected = selectedDates.has(day.date);
+          const dayType = calDay?.dayType || 'working';
+
+          return (
+            <button
+              type="button"
+              key={day.date}
+              onClick={() => toggleDate(day.date)}
+              className={`
+                p-2 text-center rounded-lg border-2 transition-all
+                ${day.isCurrentMonth ? '' : 'opacity-40'}
+                ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-200' : 'border-transparent'}
+                ${dayTypeColors[dayType] || 'bg-white'}
+              `}
+            >
+              <div className="text-sm font-medium">{day.dayOfMonth}</div>
+              {calDay?.name && <div className="text-xs truncate">{calDay.name}</div>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// =============== SHIFT SCHEDULE TAB ===============
+interface ShiftInstance {
+  id: number;
+  shiftTemplateId: number;
+  productionDate: string;
+  plannedStartAt: string;
+  plannedEndAt: string;
+  status: string;
+  isOvertime: boolean;
+  shiftName: string | null;
+}
+
+function ShiftScheduleTab() {
+  const queryClient = useQueryClient();
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const now = new Date();
+    const day = now.getDay();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
+  });
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+
+  const startDate = currentWeekStart.toISOString().split('T')[0];
+  const endDate = new Date(currentWeekStart.getTime() + 13 * 86400000).toISOString().split('T')[0];
+
+  const { data: instances = [] } = useQuery<ShiftInstance[]>({
+    queryKey: ['shift-instances', startDate, endDate],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/calendar/shift-instances?startDate=${startDate}&endDate=${endDate}`
+      );
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: calendarDays = [] } = useQuery<CalendarDay[]>({
+    queryKey: ['plant-calendar', startDate, endDate],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/calendar/plant-calendar?startDate=${startDate}&endDate=${endDate}`
+      );
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const toggleOvertimeMutation = useMutation({
+    mutationFn: async (data: { dates: string[]; isOvertime: boolean }) => {
+      const res = await fetch('/api/calendar/shift-instances/bulk-overtime', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shift-instances'] });
+      queryClient.invalidateQueries({ queryKey: ['plant-calendar'] });
+      setSelectedDates(new Set());
+    },
+  });
+
+  // Group instances by date
+  const instancesByDate = new Map<string, ShiftInstance[]>();
+  for (const inst of instances) {
+    const existing = instancesByDate.get(inst.productionDate) || [];
+    existing.push(inst);
+    instancesByDate.set(inst.productionDate, existing);
+  }
+
+  const calendarMap = new Map(calendarDays.map((d) => [d.date, d]));
+
+  // Generate 2-week dates
+  const dates: string[] = [];
+  for (let i = 0; i < 14; i++) {
+    dates.push(new Date(currentWeekStart.getTime() + i * 86400000).toISOString().split('T')[0]);
+  }
+
+  const toggleDate = (date: string) => {
+    const newSet = new Set(selectedDates);
+    if (newSet.has(date)) {
+      newSet.delete(date);
+    } else {
+      newSet.add(date);
+    }
+    setSelectedDates(newSet);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentWeekStart(new Date(currentWeekStart.getTime() - 14 * 86400000))
+            }
+            className="px-3 py-1 border rounded hover:bg-slate-50"
+          >
+            ← 2 weeks
+          </button>
+          <h3 className="text-lg font-semibold">Shift Schedule</h3>
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentWeekStart(new Date(currentWeekStart.getTime() + 14 * 86400000))
+            }
+            className="px-3 py-1 border rounded hover:bg-slate-50"
+          >
+            2 weeks →
+          </button>
+        </div>
+
+        {/* Actions */}
+        {selectedDates.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500">{selectedDates.size} dates selected</span>
+            <button
+              type="button"
+              onClick={() =>
+                toggleOvertimeMutation.mutate({
+                  dates: Array.from(selectedDates),
+                  isOvertime: true,
+                })
+              }
+              className="px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700"
+            >
+              Mark Overtime
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                toggleOvertimeMutation.mutate({
+                  dates: Array.from(selectedDates),
+                  isOvertime: false,
+                })
+              }
+              className="px-3 py-1 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700"
+            >
+              Mark Normal
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDates(new Set())}
+              className="px-2 py-1 text-slate-500 hover:text-slate-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-7 gap-2">
+        {dates.map((date) => {
+          const dayOfWeek = new Date(date).toLocaleDateString('en', { weekday: 'short' });
+          const dayOfMonth = new Date(date).getDate();
+          const shifts = instancesByDate.get(date) || [];
+          const calDay = calendarMap.get(date);
+          const isSelected = selectedDates.has(date);
+          const isWeekend = calDay?.dayType === 'weekend';
+          const hasOvertime = shifts.some((s) => s.isOvertime);
+
+          return (
+            <button
+              type="button"
+              key={date}
+              onClick={() => toggleDate(date)}
+              className={`
+                p-3 rounded-lg border-2 text-left transition-all
+                ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-200' : 'border-slate-200'}
+                ${isWeekend ? 'bg-slate-100' : 'bg-white'}
+                ${hasOvertime ? 'bg-purple-50' : ''}
+              `}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <div className="text-xs text-slate-500">{dayOfWeek}</div>
+                  <div className="text-lg font-semibold">{dayOfMonth}</div>
+                </div>
+                {hasOvertime && (
+                  <span className="text-xs px-1.5 py-0.5 bg-purple-200 text-purple-800 rounded">
+                    OT
+                  </span>
+                )}
+              </div>
+              {shifts.length > 0 ? (
+                <div className="space-y-1">
+                  {shifts.map((shift) => (
+                    <div
+                      key={shift.id}
+                      className={`text-xs px-1.5 py-0.5 rounded ${
+                        shift.isOvertime
+                          ? 'bg-purple-200 text-purple-800'
+                          : 'bg-emerald-200 text-emerald-800'
+                      }`}
+                    >
+                      {shift.shiftName}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400">No shifts</div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // =============== MAIN PAGE ===============
 export function MasterDataPage() {
   const [activeTab, setActiveTab] = useState<Tab>('shifts');
@@ -1124,17 +1584,29 @@ export function MasterDataPage() {
           Master Data
         </h1>
         <p className="text-slate-500 mt-1">
-          Manage shifts, breaks, downtime reasons, and product lines
+          Manage shifts, calendars, downtime reasons, and product lines
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200 mb-0">
+      <div className="flex gap-1 border-b border-slate-200 mb-0 flex-wrap">
         <TabButton
           active={activeTab === 'shifts'}
           onClick={() => setActiveTab('shifts')}
           icon={<Clock className="w-4 h-4" />}
           label="Shifts & Breaks"
+        />
+        <TabButton
+          active={activeTab === 'plantcalendar'}
+          onClick={() => setActiveTab('plantcalendar')}
+          icon={<Calendar className="w-4 h-4" />}
+          label="Plant Calendar"
+        />
+        <TabButton
+          active={activeTab === 'shiftschedule'}
+          onClick={() => setActiveTab('shiftschedule')}
+          icon={<CalendarDays className="w-4 h-4" />}
+          label="Shift Schedule"
         />
         <TabButton
           active={activeTab === 'downtime'}
@@ -1159,6 +1631,8 @@ export function MasterDataPage() {
       {/* Tab Content */}
       <div className="bg-white rounded-b-lg border border-t-0 border-slate-200 p-6">
         {activeTab === 'shifts' && <ShiftsTab />}
+        {activeTab === 'plantcalendar' && <PlantCalendarTab />}
+        {activeTab === 'shiftschedule' && <ShiftScheduleTab />}
         {activeTab === 'downtime' && <DowntimeReasonsTab />}
         {activeTab === 'productlines' && <ProductLinesTab />}
         {activeTab === 'machines' && <MachinesTab />}
