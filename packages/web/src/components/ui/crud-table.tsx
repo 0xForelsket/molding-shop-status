@@ -62,8 +62,11 @@ export function CrudTable<T extends object>({
                   key={String(row[keyField])}
                   className="hover:bg-slate-50 transition-colors duration-150"
                 >
-                  {columns.map((col) => (
-                    <td key={String(col.key)} className="px-6 py-4 text-sm text-slate-700">
+                  {columns.map((col, colIndex) => (
+                    <td
+                      key={`${String(col.key)}-${colIndex}`}
+                      className="px-6 py-4 text-sm text-slate-700"
+                    >
                       {col.render ? col.render(row[col.key], row) : String(row[col.key] ?? '-')}
                     </td>
                   ))}
