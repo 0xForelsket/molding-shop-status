@@ -264,3 +264,28 @@ export const productionLogs = pgTable('production_logs', {
 
 export type ProductionLog = typeof productionLogs.$inferSelect;
 export type NewProductionLog = typeof productionLogs.$inferInsert;
+
+// ============== SCRAP REASONS ==============
+
+export const scrapReasons = pgTable('scrap_reasons', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(), // e.g., 'SCRATCH', 'SHORT'
+  name: text('name').notNull(), // e.g., 'Scratch', 'Short Mold'
+  category: text('category').notNull().default('general'), // e.g., 'visual', 'process'
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const productionLogScraps = pgTable('production_log_scraps', {
+  id: serial('id').primaryKey(),
+  productionLogId: integer('production_log_id')
+    .notNull()
+    .references(() => productionLogs.id),
+  scrapReasonId: integer('scrap_reason_id')
+    .notNull()
+    .references(() => scrapReasons.id),
+  quantity: integer('quantity').notNull().default(0),
+});
+
+export type ScrapReason = typeof scrapReasons.$inferSelect;
+export type ProductionLogScrap = typeof productionLogScraps.$inferSelect;
