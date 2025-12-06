@@ -15,7 +15,38 @@ const OFFLINE_THRESHOLD_SEC = 30;
 
 // Get all machines
 machineRoutes.get('/', async (c) => {
-  const allMachines = await db.select().from(machines).orderBy(machines.machineId);
+  const allMachines = await db
+    .select({
+      machineId: machines.machineId,
+      machineName: machines.machineName,
+      status: machines.status,
+      green: machines.green,
+      red: machines.red,
+      cycleCount: machines.cycleCount,
+      inputMode: machines.inputMode,
+      statusUpdatedBy: machines.statusUpdatedBy,
+      productionOrder: machines.productionOrder,
+      partNumber: machines.partNumber,
+      partName: machines.partName,
+      targetCycleTime: machines.targetCycleTime,
+      partsPerCycle: machines.partsPerCycle,
+      brand: machines.brand,
+      model: machines.model,
+      serialNo: machines.serialNo,
+      tonnage: machines.tonnage,
+      screwDiameter: machines.screwDiameter,
+      injectionWeight: machines.injectionWeight,
+      is2K: machines.is2K,
+      floorRow: machines.floorRow,
+      floorPosition: machines.floorPosition,
+      lastSeen: machines.lastSeen,
+      createdAt: machines.createdAt,
+      quantityRequired: productionOrders.quantityRequired,
+      quantityCompleted: productionOrders.quantityCompleted,
+    })
+    .from(machines)
+    .leftJoin(productionOrders, eq(machines.productionOrder, productionOrders.orderNumber))
+    .orderBy(machines.machineId);
 
   const now = Date.now();
   const result = allMachines.map((m) => {
