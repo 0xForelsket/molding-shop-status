@@ -2,8 +2,8 @@
 
 // Shifts - Day and Night only
 export const shiftSeeds = [
-  { id: 1, name: 'Day Shift', startTime: '07:00', endTime: '19:00' },
-  { id: 2, name: 'Night Shift', startTime: '19:00', endTime: '07:00' },
+  { id: 1, name: 'Day Shift', startTime: '06:00', endTime: '18:00' },
+  { id: 2, name: 'Night Shift', startTime: '18:00', endTime: '06:00' },
 ];
 
 // Downtime Reasons - categorized for reporting
