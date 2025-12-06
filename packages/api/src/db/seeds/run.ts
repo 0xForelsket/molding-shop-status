@@ -12,6 +12,7 @@ import {
   shifts,
   users,
 } from '../schema';
+import { ensureShiftSchedule, seedCalendar } from './calendar';
 import { machineSeeds } from './machines';
 import { machinePartSeeds, partSeeds } from './parts';
 import {
@@ -48,6 +49,14 @@ async function seed() {
     await db.insert(shiftBreaks).values(brk).onConflictDoNothing();
   }
   console.log(`    ✓ ${shiftBreakSeeds.length} shift breaks`);
+
+  // Seed plant calendar (current year + next year)
+  console.log('  → Seeding plant calendar...');
+  await seedCalendar();
+
+  // Ensure shift instances for next 42 days
+  console.log('  → Generating shift instances...');
+  await ensureShiftSchedule(42);
 
   // Seed downtime reasons
   console.log('  → Inserting downtime reasons...');

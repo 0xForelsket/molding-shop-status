@@ -108,7 +108,7 @@ export const shifts = pgTable('shifts', {
   isActive: boolean('is_active').default(true),
 });
 
-// ============== SHIFT BREAKS ==============
+// ============== SHIFT BREAKS (Template defaults) ==============
 
 export const shiftBreaks = pgTable('shift_breaks', {
   id: serial('id').primaryKey(),
@@ -120,6 +120,49 @@ export const shiftBreaks = pgTable('shift_breaks', {
   endTime: text('end_time').notNull(), // e.g., '13:30'
   durationMinutes: integer('duration_minutes').notNull(),
   isActive: boolean('is_active').default(true),
+});
+
+// ============== PLANT CALENDAR ==============
+
+export const plantCalendar = pgTable('plant_calendar', {
+  date: text('date').primaryKey(), // YYYY-MM-DD format
+  dayType: text('day_type').notNull().default('working'), // 'working', 'weekend', 'holiday', 'shutdown', 'special'
+  weekNum: integer('week_num'),
+  name: text('name'), // e.g., 'Christmas', 'Annual Maintenance'
+  notes: text('notes'),
+});
+
+// ============== SHIFT INSTANCES ==============
+
+export const shiftInstances = pgTable('shift_instances', {
+  id: serial('id').primaryKey(),
+  shiftTemplateId: integer('shift_template_id')
+    .notNull()
+    .references(() => shifts.id),
+  productionDate: text('production_date')
+    .notNull()
+    .references(() => plantCalendar.date),
+  plannedStartAt: timestamp('planned_start_at').notNull(),
+  plannedEndAt: timestamp('planned_end_at').notNull(),
+  actualStartAt: timestamp('actual_start_at'),
+  actualEndAt: timestamp('actual_end_at'),
+  status: text('status').default('scheduled'), // 'scheduled', 'active', 'completed', 'cancelled'
+  isOvertime: boolean('is_overtime').default(false),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ============== SHIFT INSTANCE BREAKS ==============
+
+export const shiftInstanceBreaks = pgTable('shift_instance_breaks', {
+  id: serial('id').primaryKey(),
+  shiftInstanceId: integer('shift_instance_id')
+    .notNull()
+    .references(() => shiftInstances.id),
+  name: text('name').notNull(),
+  startTime: timestamp('start_time').notNull(),
+  endTime: timestamp('end_time').notNull(),
+  durationMinutes: integer('duration_minutes').notNull(),
 });
 
 // ============== DOWNTIME REASONS ==============
@@ -141,7 +184,7 @@ export const downtimeLogs = pgTable('downtime_logs', {
   reasonCode: text('reason_code')
     .references(() => downtimeReasons.code)
     .notNull(),
-  shiftId: integer('shift_id').references(() => shifts.id),
+  shiftInstanceId: integer('shift_instance_id').references(() => shiftInstances.id),
   notes: text('notes'),
   startedAt: timestamp('started_at').defaultNow(),
   endedAt: timestamp('ended_at'),
@@ -178,6 +221,10 @@ export type Part = typeof parts.$inferSelect;
 export type MachinePart = typeof machineParts.$inferSelect;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 export type Shift = typeof shifts.$inferSelect;
+export type ShiftBreak = typeof shiftBreaks.$inferSelect;
+export type PlantCalendar = typeof plantCalendar.$inferSelect;
+export type ShiftInstance = typeof shiftInstances.$inferSelect;
+export type ShiftInstanceBreak = typeof shiftInstanceBreaks.$inferSelect;
 export type DowntimeReason = typeof downtimeReasons.$inferSelect;
 export type DowntimeLog = typeof downtimeLogs.$inferSelect;
 export type ProductLine = typeof productLines.$inferSelect;
@@ -193,10 +240,9 @@ export const productionLogs = pgTable('production_logs', {
   orderNumber: text('order_number')
     .references(() => productionOrders.orderNumber)
     .notNull(),
-  shiftId: integer('shift_id')
-    .references(() => shifts.id)
+  shiftInstanceId: integer('shift_instance_id')
+    .references(() => shiftInstances.id)
     .notNull(),
-  shiftDate: timestamp('shift_date').notNull(),
 
   // Production counts
   quantityProduced: integer('quantity_produced').default(0),

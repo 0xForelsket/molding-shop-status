@@ -6,6 +6,7 @@ import { db } from './db';
 import { machines } from './db/schema';
 import { errorHandler } from './middleware/error-handler';
 import { authRoutes } from './routes/auth';
+import { calendarRoutes } from './routes/calendar';
 import downtimeRoutes from './routes/downtime';
 import { machineRoutes } from './routes/machines';
 import { orderRoutes } from './routes/orders';
@@ -49,6 +50,7 @@ app.route('/api/reference', referenceRoutes);
 app.route('/api/production-logs', productionLogsRoutes);
 app.route('/api/shifts', shiftsRoutes);
 app.route('/api/downtime', downtimeRoutes);
+app.route('/api/calendar', calendarRoutes);
 
 // ============== SUMMARY ENDPOINT ==============
 
