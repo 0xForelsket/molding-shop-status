@@ -1,11 +1,11 @@
 // packages/web/src/components/AppLayout.tsx
 // Shared layout with sidebar navigation for all pages
 
-import { ClipboardList, Cog, LayoutGrid, LogOut, Menu, Package, X } from 'lucide-react';
+import { ClipboardList, Cog, FileText, LayoutGrid, LogOut, Menu, Package, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../lib/auth';
 
-export type Page = 'dashboard' | 'parts' | 'orders' | 'machines';
+export type Page = 'dashboard' | 'parts' | 'orders' | 'machines' | 'production';
 
 interface NavItem {
   id: Page;
@@ -26,6 +26,11 @@ export function AppLayout({ currentPage, onNavigate, children }: AppLayoutProps)
 
   const navItems: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutGrid className="w-5 h-5" /> },
+    {
+      id: 'production',
+      label: 'Log Production',
+      icon: <FileText className="w-5 h-5" />,
+    },
     {
       id: 'orders',
       label: 'Production Orders',

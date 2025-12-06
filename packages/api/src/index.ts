@@ -8,7 +8,9 @@ import { errorHandler } from './middleware/error-handler';
 import { authRoutes } from './routes/auth';
 import { machineRoutes } from './routes/machines';
 import { orderRoutes } from './routes/orders';
+import productionLogsRoutes from './routes/production-logs';
 import { referenceRoutes } from './routes/reference';
+import shiftsRoutes from './routes/shifts';
 import { statusRoutes } from './routes/status';
 
 const app = new Hono();
@@ -43,6 +45,8 @@ app.route('/api/machines', machineRoutes);
 app.route('/api/status', statusRoutes);
 app.route('/api/orders', orderRoutes);
 app.route('/api/reference', referenceRoutes);
+app.route('/api/production-logs', productionLogsRoutes);
+app.route('/api/shifts', shiftsRoutes);
 
 // ============== SUMMARY ENDPOINT ==============
 

@@ -168,3 +168,39 @@ export type DowntimeReason = typeof downtimeReasons.$inferSelect;
 export type DowntimeLog = typeof downtimeLogs.$inferSelect;
 export type ProductLine = typeof productLines.$inferSelect;
 export type User = typeof users.$inferSelect;
+
+// ============== PRODUCTION LOGS ==============
+
+export const productionLogs = pgTable('production_logs', {
+  id: serial('id').primaryKey(),
+  machineId: integer('machine_id')
+    .references(() => machines.machineId)
+    .notNull(),
+  orderNumber: text('order_number')
+    .references(() => productionOrders.orderNumber)
+    .notNull(),
+  shiftId: integer('shift_id')
+    .references(() => shifts.id)
+    .notNull(),
+  shiftDate: timestamp('shift_date').notNull(),
+
+  // Production counts
+  quantityProduced: integer('quantity_produced').default(0),
+  quantityScrap: integer('quantity_scrap').default(0),
+
+  // Timing
+  startedAt: timestamp('started_at'),
+  endedAt: timestamp('ended_at'),
+
+  // Status for this shift entry
+  status: text('status').default('in_progress'), // 'in_progress', 'completed'
+
+  // Operator info
+  loggedBy: text('logged_by'),
+  notes: text('notes'),
+
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export type ProductionLog = typeof productionLogs.$inferSelect;
+export type NewProductionLog = typeof productionLogs.$inferInsert;

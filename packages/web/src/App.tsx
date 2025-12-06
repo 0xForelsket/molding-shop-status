@@ -8,6 +8,7 @@ import { MachinesPage } from './components/MachinesPage';
 import { OrdersPage } from './components/OrdersPage';
 import { PartsPage } from './components/PartsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { ShiftProductionPage } from './components/ShiftProductionPage';
 import { AuthProvider } from './lib/auth';
 
 const queryClient = new QueryClient({
@@ -28,6 +29,7 @@ export default function App() {
         <ProtectedRoute>
           <AppLayout currentPage={page} onNavigate={setPage}>
             {page === 'dashboard' && <Dashboard />}
+            {page === 'production' && <ShiftProductionPage />}
             {page === 'parts' && <PartsPage />}
             {page === 'orders' && <OrdersPage />}
             {page === 'machines' && <MachinesPage />}
