@@ -12,6 +12,7 @@ import {
   machines,
   parts,
   productLines,
+  scrapReasons,
   shiftBreaks,
   shifts,
 } from '../db/schema';
@@ -343,3 +344,13 @@ referenceRoutes.delete(
     return c.json({ success: true });
   }
 );
+
+// ============== SCRAP REASONS ==============
+
+referenceRoutes.get('/scrap-reasons', async (c) => {
+  const reasons = await db
+    .select()
+    .from(scrapReasons)
+    .orderBy(scrapReasons.category, scrapReasons.name);
+  return c.json(reasons);
+});

@@ -6,6 +6,7 @@ import { db } from '../db';
 import {
   machines,
   parts,
+  productionLogScraps,
   productionLogs,
   productionOrders,
   shiftInstances,
@@ -82,6 +83,7 @@ app.post('/', async (c) => {
     shiftInstanceId,
     quantityProduced = 0,
     quantityScrap = 0,
+    scraps = [], // Array of { reasonId, quantity }
     startedAt,
     endedAt,
     status = 'in_progress',
@@ -104,42 +106,66 @@ app.post('/', async (c) => {
     return c.json({ error: 'Invalid shiftInstanceId' }, 400);
   }
 
-  // Create the log
-  const [newLog] = await db
-    .insert(productionLogs)
-    .values({
-      machineId,
-      orderNumber,
-      shiftInstanceId,
-      quantityProduced,
-      quantityScrap,
-      startedAt: startedAt ? new Date(startedAt) : null,
-      endedAt: endedAt ? new Date(endedAt) : null,
-      status,
-      loggedBy,
-      notes,
-    })
-    .returning();
-
-  // Update the production order's quantityCompleted
-  if (quantityProduced > 0) {
-    await db
-      .update(productionOrders)
-      .set({
-        quantityCompleted: sql`${productionOrders.quantityCompleted} + ${quantityProduced}`,
-        status: 'running',
-      })
-      .where(eq(productionOrders.orderNumber, orderNumber));
+  // Calculate total scrap from details if provided
+  let finalScrapQuantity = quantityScrap;
+  if (scraps.length > 0) {
+    finalScrapQuantity = scraps.reduce(
+      (sum: number, s: { quantity: number }) => sum + s.quantity,
+      0
+    );
   }
 
-  // Update machine status and production order
-  await db
-    .update(machines)
-    .set({
-      status: 'running',
-      productionOrder: orderNumber,
-    })
-    .where(eq(machines.machineId, machineId));
+  // Create the log
+  const newLog = await db.transaction(async (tx) => {
+    const [log] = await tx
+      .insert(productionLogs)
+      .values({
+        machineId,
+        orderNumber,
+        shiftInstanceId,
+        quantityProduced,
+        quantityScrap: finalScrapQuantity,
+        startedAt: startedAt ? new Date(startedAt) : null,
+        endedAt: endedAt ? new Date(endedAt) : null,
+        status,
+        loggedBy,
+        notes,
+      })
+      .returning();
+
+    // Insert detailed scrap records
+    if (scraps.length > 0) {
+      await tx.insert(productionLogScraps).values(
+        scraps.map((s: { reasonId: number; quantity: number }) => ({
+          productionLogId: log.id,
+          scrapReasonId: s.reasonId,
+          quantity: s.quantity,
+        }))
+      );
+    }
+
+    // Update the production order's quantityCompleted
+    if (quantityProduced > 0) {
+      await tx
+        .update(productionOrders)
+        .set({
+          quantityCompleted: sql`${productionOrders.quantityCompleted} + ${quantityProduced}`,
+          status: 'running',
+        })
+        .where(eq(productionOrders.orderNumber, orderNumber));
+    }
+
+    // Update machine status and production order
+    await tx
+      .update(machines)
+      .set({
+        status: 'running',
+        productionOrder: orderNumber,
+      })
+      .where(eq(machines.machineId, machineId));
+
+    return log;
+  });
 
   return c.json(newLog, 201);
 });
