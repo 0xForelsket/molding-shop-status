@@ -563,7 +563,21 @@ function BreakForm({
   const [name, setName] = useState(brk?.name || '');
   const [startTime, setStartTime] = useState(brk?.startTime || '12:00');
   const [endTime, setEndTime] = useState(brk?.endTime || '13:00');
-  const [durationMinutes, setDurationMinutes] = useState(brk?.durationMinutes || 60);
+
+  // Auto-calculate duration from start and end times
+  const calculateDuration = (start: string, end: string): number => {
+    const [startH, startM] = start.split(':').map(Number);
+    const [endH, endM] = end.split(':').map(Number);
+    const startMins = startH * 60 + startM;
+    let endMins = endH * 60 + endM;
+    // Handle overnight breaks (e.g., 23:00 to 00:30)
+    if (endMins < startMins) {
+      endMins += 24 * 60;
+    }
+    return endMins - startMins;
+  };
+
+  const durationMinutes = calculateDuration(startTime, endTime);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -632,19 +646,8 @@ function BreakForm({
           />
         </div>
       </div>
-      <div>
-        <label htmlFor="break-duration" className="block text-sm font-medium text-slate-700 mb-1">
-          Duration (minutes)
-        </label>
-        <input
-          id="break-duration"
-          type="number"
-          value={durationMinutes}
-          onChange={(e) => setDurationMinutes(Number(e.target.value))}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-          min={1}
-          required
-        />
+      <div className="text-sm text-slate-600">
+        Duration: <span className="font-medium">{durationMinutes} minutes</span>
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <button
@@ -656,7 +659,7 @@ function BreakForm({
         </button>
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || durationMinutes <= 0}
           className="px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
         >
           {isLoading ? 'Saving...' : 'Save'}
