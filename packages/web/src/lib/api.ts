@@ -22,6 +22,8 @@ export interface Machine {
   is2K: boolean | null;
   lastSeen: string | null;
   secondsSinceSeen: number | null;
+  quantityRequired: number | null;
+  quantityCompleted: number | null;
 }
 
 export interface Summary {
