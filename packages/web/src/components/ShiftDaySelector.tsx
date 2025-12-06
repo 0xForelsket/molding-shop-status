@@ -91,32 +91,32 @@ export function ShiftDaySelector({
         {/* Time Range */}
         <div className="flex-1 min-w-[280px]">
           <div className="flex items-center justify-between mb-2">
-            <span className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wide">
-              <Timer className="w-4 h-4 text-slate-400" />
+            <span className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wide">
+              <Timer className="w-3.5 h-3.5" />
               Running Time
             </span>
             <button
               type="button"
               onClick={handleUseFullShift}
               disabled={!selectedShift}
-              className="text-xs text-blue-600 hover:text-blue-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors uppercase tracking-wide"
+              className="text-[10px] text-blue-600 hover:text-blue-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors uppercase tracking-wide"
             >
               Use Full Shift
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <input
               type="time"
               value={timeFrom}
               onChange={(e) => onTimeChange(e.target.value, timeTo)}
-              className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-colors text-sm font-medium text-slate-700"
+              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-colors text-xs font-medium text-slate-600"
             />
-            <span className="text-slate-400 font-medium">to</span>
+            <span className="text-slate-300 font-medium text-xs">to</span>
             <input
               type="time"
               value={timeTo}
               onChange={(e) => onTimeChange(timeFrom, e.target.value)}
-              className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-colors text-sm font-medium text-slate-700"
+              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-colors text-xs font-medium text-slate-600"
             />
           </div>
         </div>

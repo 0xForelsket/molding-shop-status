@@ -215,7 +215,7 @@ export function ShiftProductionPage() {
       shiftId: number;
       shiftDate: string;
       quantityProduced: number;
-      scraps: ScrapEntry[];
+      scraps: { reasonId: number; quantity: number }[];
       notes: string;
     }) => {
       const res = await fetch('/api/production-logs', {
@@ -534,7 +534,7 @@ export function ShiftProductionPage() {
                             onClick={() =>
                               setSelectedOrderNumber(order.production_orders.orderNumber)
                             }
-                            className={`p-5 rounded-xl border text-left transition-all flex items-center gap-5 ${
+                            className={`p-4 rounded-xl border text-left transition-all flex items-center gap-4 ${
                               isSelected
                                 ? 'border-blue-500 bg-blue-50/50 shadow-sm ring-1 ring-blue-200'
                                 : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
@@ -542,28 +542,35 @@ export function ShiftProductionPage() {
                           >
                             <ProgressRing
                               progress={progress}
-                              size={52}
+                              size={48}
                               strokeWidth={5}
                               color="indigo"
-                              showPercentage={true}
+                              showPercentage={false}
                             />
                             <div className="flex-1 min-w-0">
-                              <div className="font-bold text-slate-900 text-xl mb-1">
-                                {order.production_orders.orderNumber}
+                              <div className="flex items-baseline justify-between mb-1">
+                                <div className="font-bold text-slate-900 text-lg">
+                                  {order.production_orders.orderNumber}
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-2xl font-bold text-slate-800">
+                                    {order.production_orders.quantityCompleted.toLocaleString()}
+                                  </span>
+                                  <span className="text-xs text-slate-400 font-medium ml-1">
+                                    / {order.production_orders.quantityRequired.toLocaleString()}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="text-sm text-slate-600 truncate font-medium">
-                                {order.production_orders.partNumber}
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm text-slate-600 truncate font-medium">
+                                  {order.production_orders.partNumber}
+                                </div>
+                                <div className="text-xs font-bold text-indigo-600">
+                                  {Math.round(progress)}%
+                                </div>
                               </div>
-                              <div className="text-xs text-slate-500 mt-1 truncate">
+                              <div className="text-xs text-slate-500 mt-0.5 truncate">
                                 {order.parts?.partName}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-slate-700">
-                                {order.production_orders.quantityCompleted.toLocaleString()}
-                              </div>
-                              <div className="text-xs text-slate-400">
-                                / {order.production_orders.quantityRequired.toLocaleString()}
                               </div>
                             </div>
                           </button>
