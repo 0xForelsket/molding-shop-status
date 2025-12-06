@@ -1,7 +1,7 @@
 // packages/web/src/components/Dashboard.tsx
 // Dashboard page content (sidebar handled by AppLayout)
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMachines, useSummary } from '../hooks/useMachines';
 import type { Machine } from '../lib/api';
 import { EditableTable } from './EditableTable';
@@ -9,11 +9,71 @@ import { FloorLayoutDashboard } from './FloorLayoutDashboard';
 import { MachineCard } from './MachineCard';
 import { MachineDetailDialog } from './MachineDetailDialog';
 
+type StatusFilter = 'all' | 'running' | 'idle' | 'fault' | 'offline';
+
+// Shift configuration (customize as needed)
+const SHIFTS = [
+  { name: 'Day Shift', start: 6, end: 14 },
+  { name: 'Swing Shift', start: 14, end: 22 },
+  { name: 'Night Shift', start: 22, end: 6 },
+];
+
+function getCurrentShift() {
+  const now = new Date();
+  const currentHour = now.getHours();
+
+  for (const shift of SHIFTS) {
+    if (shift.start < shift.end) {
+      // Normal shift (e.g., 6-14)
+      if (currentHour >= shift.start && currentHour < shift.end) {
+        const endTime = new Date(now);
+        endTime.setHours(shift.end, 0, 0, 0);
+        const remaining = endTime.getTime() - now.getTime();
+        return { name: shift.name, remaining };
+      }
+    } else {
+      // Overnight shift (e.g., 22-6)
+      if (currentHour >= shift.start || currentHour < shift.end) {
+        const endTime = new Date(now);
+        if (currentHour >= shift.start) {
+          endTime.setDate(endTime.getDate() + 1);
+        }
+        endTime.setHours(shift.end, 0, 0, 0);
+        const remaining = endTime.getTime() - now.getTime();
+        return { name: shift.name, remaining };
+      }
+    }
+  }
+  return { name: 'Unknown', remaining: 0 };
+}
+
+function formatTimeRemaining(ms: number): string {
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  return `${hours}h ${minutes}m remaining`;
+}
+
 export function Dashboard() {
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'floor'>('grid');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const { data: machines = [], isLoading, error, refetch } = useMachines();
   const { data: summary } = useSummary();
+
+  // Live clock update
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const shift = getCurrentShift();
+
+  // Filter machines based on status
+  const filteredMachines =
+    statusFilter === 'all' ? machines : machines.filter((m) => m.status === statusFilter);
 
   if (error) {
     return (
@@ -33,7 +93,15 @@ export function Dashboard() {
     <>
       {/* Top Bar */}
       <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6">
-        <h1 className="text-lg font-semibold text-slate-800">Shop Floor Overview</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold text-slate-800">Shop Floor Overview</h1>
+
+          {/* Shift Information */}
+          <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-full border border-indigo-200">
+            <span className="text-sm font-medium text-indigo-700">{shift.name}</span>
+            <span className="text-xs text-indigo-500">{formatTimeRemaining(shift.remaining)}</span>
+          </div>
+        </div>
 
         <div className="flex items-center gap-4">
           {/* View Toggle */}
@@ -73,37 +141,81 @@ export function Dashboard() {
             </button>
           </div>
 
-          {/* Time */}
-          <time className="text-slate-500 text-sm tabular-nums">
-            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+          {/* Live Time */}
+          <time className="text-slate-500 text-sm tabular-nums font-medium">
+            {currentTime.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })}
           </time>
         </div>
       </header>
 
-      {/* Summary Stats Bar */}
+      {/* Summary Stats Bar - Now Clickable as Filters */}
       {summary && (
         <div className="bg-white border-b border-slate-200 px-6 py-3">
           <div className="flex gap-4">
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`flex items-center gap-2 px-4 py-2 rounded transition-all ${
+                statusFilter === 'all'
+                  ? 'bg-slate-200 ring-2 ring-slate-400'
+                  : 'bg-slate-100 hover:bg-slate-150'
+              }`}
+            >
               <span className="text-2xl font-bold text-slate-800">{summary.total}</span>
-              <span className="text-sm text-slate-500">Total Machines</span>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded border-l-4 border-emerald-500">
+              <span className="text-sm text-slate-500">Total</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('running')}
+              className={`flex items-center gap-2 px-4 py-2 rounded border-l-4 border-emerald-500 transition-all ${
+                statusFilter === 'running'
+                  ? 'bg-emerald-100 ring-2 ring-emerald-400'
+                  : 'bg-emerald-50 hover:bg-emerald-100'
+              }`}
+            >
               <span className="text-2xl font-bold text-emerald-700">{summary.running}</span>
               <span className="text-sm text-emerald-600">Running</span>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 rounded border-l-4 border-amber-500">
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('idle')}
+              className={`flex items-center gap-2 px-4 py-2 rounded border-l-4 border-amber-500 transition-all ${
+                statusFilter === 'idle'
+                  ? 'bg-amber-100 ring-2 ring-amber-400'
+                  : 'bg-amber-50 hover:bg-amber-100'
+              }`}
+            >
               <span className="text-2xl font-bold text-amber-700">{summary.idle}</span>
               <span className="text-sm text-amber-600">Idle</span>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-red-50 rounded border-l-4 border-red-500">
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('fault')}
+              className={`flex items-center gap-2 px-4 py-2 rounded border-l-4 border-red-500 transition-all ${
+                statusFilter === 'fault'
+                  ? 'bg-red-100 ring-2 ring-red-400'
+                  : 'bg-red-50 hover:bg-red-100'
+              }`}
+            >
               <span className="text-2xl font-bold text-red-700">{summary.fault}</span>
               <span className="text-sm text-red-600">Fault</span>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded border-l-4 border-slate-400">
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('offline')}
+              className={`flex items-center gap-2 px-4 py-2 rounded border-l-4 border-slate-400 transition-all ${
+                statusFilter === 'offline'
+                  ? 'bg-slate-200 ring-2 ring-slate-400'
+                  : 'bg-slate-100 hover:bg-slate-150'
+              }`}
+            >
               <span className="text-2xl font-bold text-slate-600">{summary.offline}</span>
               <span className="text-sm text-slate-500">Offline</span>
-            </div>
+            </button>
           </div>
         </div>
       )}
@@ -115,15 +227,32 @@ export function Dashboard() {
             <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-300 border-t-emerald-600" />
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-            {machines.map((machine) => (
-              <MachineCard
-                key={machine.machineId}
-                machine={machine}
-                onClick={() => setSelectedMachine(machine)}
-              />
-            ))}
-          </div>
+          <>
+            {statusFilter !== 'all' && (
+              <div className="mb-4 flex items-center gap-2">
+                <span className="text-sm text-slate-500">
+                  Showing {filteredMachines.length} {statusFilter} machine
+                  {filteredMachines.length !== 1 ? 's' : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('all')}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Clear filter
+                </button>
+              </div>
+            )}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+              {filteredMachines.map((machine) => (
+                <MachineCard
+                  key={machine.machineId}
+                  machine={machine}
+                  onClick={() => setSelectedMachine(machine)}
+                />
+              ))}
+            </div>
+          </>
         ) : viewMode === 'floor' ? (
           <FloorLayoutDashboard />
         ) : (
