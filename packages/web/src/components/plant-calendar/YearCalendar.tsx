@@ -67,19 +67,19 @@ export function YearCalendar({
         {/* Legend - Compact */}
         <div className="flex gap-4 text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-200" />
+            <div className="w-3 h-3 rounded-sm bg-emerald-400 border border-emerald-500" />
             <span className="text-slate-600">Working</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-200" />
+            <div className="w-3 h-3 rounded-sm bg-amber-300 border border-amber-400" />
             <span className="text-slate-600">Weekend</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-rose-100 border border-rose-200" />
+            <div className="w-3 h-3 rounded-sm bg-rose-400 border border-rose-500" />
             <span className="text-slate-600">Holiday</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-orange-100 border border-orange-200" />
+            <div className="w-3 h-3 rounded-sm bg-orange-400 border border-orange-500" />
             <span className="text-slate-600">Shutdown</span>
           </div>
         </div>
@@ -170,20 +170,20 @@ function MonthCalendar({
                 }
 
                 const baseStyles =
-                  'h-8 text-xs flex items-center justify-center relative transition-all cursor-pointer select-none w-full';
-                const selectedStyles = isSelected ? 'ring-2 ring-indigo-500 z-10' : '';
+                  'h-8 text-xs flex items-center justify-center relative transition-all cursor-pointer select-none w-full font-medium';
+                const selectedStyles = isSelected
+                  ? 'ring-2 ring-indigo-600 ring-offset-1 z-10'
+                  : '';
                 const opacityStyles = isCurrentMonth ? '' : 'opacity-30 grayscale';
 
-                let bgStyles = 'bg-white hover:bg-slate-50 text-slate-700';
+                let bgStyles = 'bg-slate-100 hover:bg-slate-200 text-slate-700';
                 if (type === 'working')
-                  bgStyles = 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900';
-                if (type === 'weekend') bgStyles = 'bg-amber-50 hover:bg-amber-100 text-amber-900';
-                if (type === 'holiday')
-                  bgStyles = 'bg-rose-100 hover:bg-rose-200 text-rose-900 font-medium';
+                  bgStyles = 'bg-emerald-400 hover:bg-emerald-500 text-emerald-950';
+                if (type === 'weekend') bgStyles = 'bg-amber-300 hover:bg-amber-400 text-amber-900';
+                if (type === 'holiday') bgStyles = 'bg-rose-400 hover:bg-rose-500 text-white';
                 if (type === 'shutdown')
-                  bgStyles = 'bg-orange-100 hover:bg-orange-200 text-orange-900';
-                if (type === 'special')
-                  bgStyles = 'bg-purple-100 hover:bg-purple-200 text-purple-900';
+                  bgStyles = 'bg-orange-400 hover:bg-orange-500 text-orange-950';
+                if (type === 'special') bgStyles = 'bg-purple-400 hover:bg-purple-500 text-white';
 
                 return (
                   <button
