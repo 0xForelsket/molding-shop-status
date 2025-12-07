@@ -115,3 +115,43 @@ describe('Reference API - Scrap Reasons', () => {
     expect(Array.isArray(reasons)).toBe(true);
   });
 });
+
+describe('Reference API - Production Supervisors', () => {
+  it('GET /api/reference/production-supervisors should return array', async () => {
+    const res = await app.request('/api/reference/production-supervisors');
+    expect(res.status).toBe(200);
+
+    const supervisors = await res.json();
+    expect(Array.isArray(supervisors)).toBe(true);
+  });
+
+  it('POST /api/reference/production-supervisors should require auth', async () => {
+    const res = await app.request('/api/reference/production-supervisors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: 'TEST-SUP',
+        name: 'Test Supervisor',
+      }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('PATCH /api/reference/production-supervisors/:code should require auth', async () => {
+    const res = await app.request('/api/reference/production-supervisors/P01', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Updated Name',
+      }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('DELETE /api/reference/production-supervisors/:code should require auth', async () => {
+    const res = await app.request('/api/reference/production-supervisors/P01', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(401);
+  });
+});
