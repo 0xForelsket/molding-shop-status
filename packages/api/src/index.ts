@@ -13,6 +13,7 @@ import { moldsRoutes } from './routes/molds';
 import { orderRoutes } from './routes/orders';
 import productionLogsRoutes from './routes/production-logs';
 import { referenceRoutes } from './routes/reference';
+import { routingRoutes } from './routes/routing';
 import shiftsRoutes from './routes/shifts';
 import { statusRoutes } from './routes/status';
 import uploadRoutes from './routes/upload';
@@ -57,6 +58,7 @@ app.route('/api/shifts', shiftsRoutes);
 app.route('/api/downtime', downtimeRoutes);
 app.route('/api/calendar', calendarRoutes);
 app.route('/api/upload', uploadRoutes);
+app.route('/api/routing', routingRoutes);
 
 // ============== SUMMARY ENDPOINT ==============
 
