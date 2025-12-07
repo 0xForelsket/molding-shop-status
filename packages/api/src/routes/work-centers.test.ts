@@ -11,8 +11,8 @@ beforeAll(async () => {
 });
 
 describe('Work Centers API - Public Endpoints', () => {
-  it('GET /api/machines should return array with work center details', async () => {
-    const res = await app.request('/api/machines');
+  it('GET /api/work-centers should return array with work center details', async () => {
+    const res = await app.request('/api/work-centers');
     expect(res.status).toBe(200);
 
     const workCenters = (await res.json()) as Array<{
@@ -30,8 +30,8 @@ describe('Work Centers API - Public Endpoints', () => {
     }
   });
 
-  it('GET /api/machines/:id should return work center details', async () => {
-    const res = await app.request('/api/machines/1');
+  it('GET /api/work-centers/:id should return work center details', async () => {
+    const res = await app.request('/api/work-centers/1');
     expect(res.status).toBe(200);
 
     const wc = (await res.json()) as { id: number; name: string };
@@ -39,8 +39,8 @@ describe('Work Centers API - Public Endpoints', () => {
     expect(wc.name).toBeDefined();
   });
 
-  it('GET /api/machines/:id should return 404 for unknown work center', async () => {
-    const res = await app.request('/api/machines/99999');
+  it('GET /api/work-centers/:id should return 404 for unknown work center', async () => {
+    const res = await app.request('/api/work-centers/99999');
     expect(res.status).toBe(404);
   });
 
@@ -64,8 +64,8 @@ describe('Work Centers API - Public Endpoints', () => {
 });
 
 describe('Work Centers API - Auth Required', () => {
-  it('POST /api/machines should require auth', async () => {
-    const res = await app.request('/api/machines', {
+  it('POST /api/work-centers should require auth', async () => {
+    const res = await app.request('/api/work-centers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -77,8 +77,8 @@ describe('Work Centers API - Auth Required', () => {
     expect(res.status).toBe(401);
   });
 
-  it('POST /api/machines/:id/assign-order should require auth', async () => {
-    const res = await app.request('/api/machines/1/assign-order', {
+  it('POST /api/work-centers/:id/assign-order should require auth', async () => {
+    const res = await app.request('/api/work-centers/1/assign-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderNumber: null }),
@@ -86,8 +86,8 @@ describe('Work Centers API - Auth Required', () => {
     expect(res.status).toBe(401);
   });
 
-  it('POST /api/machines/:id/assign-order should clear order with auth', async () => {
-    const res = await app.request('/api/machines/1/assign-order', {
+  it('POST /api/work-centers/:id/assign-order should clear order with auth', async () => {
+    const res = await app.request('/api/work-centers/1/assign-order', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -101,8 +101,8 @@ describe('Work Centers API - Auth Required', () => {
     expect(json.success).toBe(true);
   });
 
-  it('POST /api/machines/:id/manual-status should require auth', async () => {
-    const res = await app.request('/api/machines/1/manual-status', {
+  it('POST /api/work-centers/:id/manual-status should require auth', async () => {
+    const res = await app.request('/api/work-centers/1/manual-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'idle', updatedBy: 'test' }),
@@ -110,8 +110,8 @@ describe('Work Centers API - Auth Required', () => {
     expect(res.status).toBe(401);
   });
 
-  it('POST /api/machines/:id/input-mode should require auth', async () => {
-    const res = await app.request('/api/machines/1/input-mode', {
+  it('POST /api/work-centers/:id/input-mode should require auth', async () => {
+    const res = await app.request('/api/work-centers/1/input-mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'manual' }),
@@ -121,8 +121,8 @@ describe('Work Centers API - Auth Required', () => {
 });
 
 describe('Work Centers API - Admin Only', () => {
-  it('DELETE /api/machines/:id should require auth', async () => {
-    const res = await app.request('/api/machines/99999', {
+  it('DELETE /api/work-centers/:id should require auth', async () => {
+    const res = await app.request('/api/work-centers/99999', {
       method: 'DELETE',
     });
     expect(res.status).toBe(401);

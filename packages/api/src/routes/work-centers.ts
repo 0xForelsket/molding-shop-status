@@ -9,13 +9,13 @@ import { db } from '../db';
 import { items, productionOrders, routing, statusLogs, workCenters } from '../db/schema';
 import { jwtAuth, requireRole } from '../middleware/auth';
 
-export const machineRoutes = new Hono();
+export const workCenterRoutes = new Hono();
 
 // Offline threshold in seconds
 const OFFLINE_THRESHOLD_SEC = 30;
 
 // Get all work centers with current order info
-machineRoutes.get('/', async (c) => {
+workCenterRoutes.get('/', async (c) => {
   const allWorkCenters = await db.select().from(workCenters).orderBy(workCenters.id);
 
   // Get active orders for each work center
@@ -77,7 +77,7 @@ machineRoutes.get('/', async (c) => {
 });
 
 // Get single work center
-machineRoutes.get('/:id', async (c) => {
+workCenterRoutes.get('/:id', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
   const workCenter = await db.select().from(workCenters).where(eq(workCenters.id, id)).limit(1);
 
@@ -85,7 +85,56 @@ machineRoutes.get('/:id', async (c) => {
     return c.json({ error: 'Work center not found' }, 404);
   }
 
-  return c.json(workCenter[0]);
+  // Get active order
+  const order = await db
+    .select({
+      workCenterId: productionOrders.workCenterId,
+      orderNumber: productionOrders.orderNumber,
+      itemNumber: productionOrders.itemNumber,
+      quantityRequired: productionOrders.quantityRequired,
+      quantityCompleted: productionOrders.quantityCompleted,
+      status: productionOrders.status,
+    })
+    .from(productionOrders)
+    .where(
+      and(
+        eq(productionOrders.workCenterId, id),
+        inArray(productionOrders.status, ['assigned', 'running'])
+      )
+    )
+    .limit(1);
+
+  let currentOrder = null;
+
+  if (order.length > 0) {
+    const item = await db
+      .select()
+      .from(items)
+      .where(eq(items.itemNumber, order[0].itemNumber))
+      .limit(1);
+
+    const routeInfo = await db
+      .select()
+      .from(routing)
+      .where(and(eq(routing.workCenterId, id), eq(routing.itemNumber, order[0].itemNumber)))
+      .limit(1);
+
+    currentOrder = {
+      orderNumber: order[0].orderNumber,
+      itemNumber: order[0].itemNumber,
+      itemName: item[0]?.name ?? null,
+      imageUrl: item[0]?.imageUrl ?? null,
+      cycleTime: routeInfo[0]?.cycleTime ?? null,
+      outputQty: routeInfo[0]?.outputQty ?? 1,
+      quantityRequired: order[0].quantityRequired,
+      quantityCompleted: order[0].quantityCompleted,
+    };
+  }
+
+  return c.json({
+    ...workCenter[0],
+    currentOrder,
+  });
 });
 
 // Assign order to work center
@@ -93,7 +142,7 @@ const assignOrderSchema = z.object({
   orderNumber: z.string().optional().nullable(),
 });
 
-machineRoutes.post(
+workCenterRoutes.post(
   '/:id/assign-order',
   jwtAuth,
   requireRole('admin', 'planner'),
@@ -160,7 +209,7 @@ const manualStatusSchema = z.object({
   cycleCount: z.number().optional(),
 });
 
-machineRoutes.post(
+workCenterRoutes.post(
   '/:id/manual-status',
   jwtAuth,
   requireRole('admin', 'line_leader'),
@@ -204,7 +253,7 @@ const inputModeSchema = z.object({
   mode: z.enum(['auto', 'manual']),
 });
 
-machineRoutes.post(
+workCenterRoutes.post(
   '/:id/input-mode',
   jwtAuth,
   requireRole('admin', 'line_leader'),
@@ -236,7 +285,7 @@ const workCenterSchema = z.object({
   inputMode: z.enum(['auto', 'manual']).optional().default('auto'),
 });
 
-machineRoutes.post(
+workCenterRoutes.post(
   '/',
   jwtAuth,
   requireRole('admin'),
@@ -250,7 +299,7 @@ machineRoutes.post(
   }
 );
 
-machineRoutes.put(
+workCenterRoutes.put(
   '/:id',
   jwtAuth,
   requireRole('admin'),
@@ -270,7 +319,7 @@ machineRoutes.put(
   }
 );
 
-machineRoutes.delete('/:id', jwtAuth, requireRole('admin'), async (c) => {
+workCenterRoutes.delete('/:id', jwtAuth, requireRole('admin'), async (c) => {
   const id = Number.parseInt(c.req.param('id'));
 
   const wc = await db.select().from(workCenters).where(eq(workCenters.id, id)).limit(1);
