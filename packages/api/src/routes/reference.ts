@@ -23,7 +23,7 @@ export const referenceRoutes = new Hono();
 
 // ============== ITEMS ==============
 
-referenceRoutes.get('/parts', async (c) => {
+referenceRoutes.get('/items', async (c) => {
   const allItems = await db.select().from(items).orderBy(items.itemNumber);
 
   // Get routing mappings with work center names
@@ -59,7 +59,7 @@ referenceRoutes.get('/parts', async (c) => {
   return c.json(result);
 });
 
-referenceRoutes.get('/parts/:itemNumber', async (c) => {
+referenceRoutes.get('/items/:itemNumber', async (c) => {
   const itemNumber = c.req.param('itemNumber');
   const item = await db.select().from(items).where(eq(items.itemNumber, itemNumber)).limit(1);
 
@@ -85,7 +85,7 @@ const itemSchema = z.object({
 });
 
 referenceRoutes.post(
-  '/parts',
+  '/items',
   jwtAuth,
   requireRole('admin', 'planner'),
   zValidator('json', itemSchema),
@@ -110,7 +110,7 @@ referenceRoutes.post(
 );
 
 referenceRoutes.patch(
-  '/parts/:itemNumber',
+  '/items/:itemNumber',
   jwtAuth,
   requireRole('admin', 'planner'),
   zValidator('json', itemSchema.partial()),
@@ -141,7 +141,7 @@ referenceRoutes.patch(
   }
 );
 
-referenceRoutes.delete('/parts/:itemNumber', jwtAuth, requireRole('admin'), async (c) => {
+referenceRoutes.delete('/items/:itemNumber', jwtAuth, requireRole('admin'), async (c) => {
   const itemNumber = c.req.param('itemNumber');
   await db.delete(items).where(eq(items.itemNumber, itemNumber));
   return c.json({ success: true });

@@ -23,7 +23,7 @@ describe('Integration: Full Production Workflow', () => {
       },
       body: JSON.stringify({
         orderNumber: testOrderNumber,
-        partNumber: '130877-T2R', // Actual part from seed data
+        itemNumber: '130877-T2R', // Actual part from seed data
         quantityRequired: 100,
       }),
     });
@@ -42,7 +42,7 @@ describe('Integration: Full Production Workflow', () => {
         Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify({
-        machineId: testMachineId,
+        workCenterId: testMachineId,
       }),
     });
     expect(res.status).toBe(200);
@@ -56,39 +56,39 @@ describe('Integration: Full Production Workflow', () => {
     expect(res.status).toBe(200);
 
     const orders = (await res.json()) as Array<{
-      production_orders: { orderNumber: string; status: string; machineId: number | null };
+      order: { orderNumber: string; status: string; workCenterId: number | null };
     }>;
-    const order = orders.find((o) => o.production_orders.orderNumber === testOrderNumber);
+    const order = orders.find((o) => o.order.orderNumber === testOrderNumber);
 
     expect(order).toBeDefined();
-    expect(order?.production_orders.status).toBe('assigned');
-    expect(order?.production_orders.machineId).toBe(testMachineId);
+    expect(order?.order.status).toBe('assigned');
+    expect(order?.order.workCenterId).toBe(testMachineId);
   });
 
   it('Step 4: Configure the machine with the order', async () => {
-    const res = await app.request(`/api/machines/${testMachineId}/config`, {
+    const res = await app.request(`/api/work-centers/${testMachineId}/assign-order`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify({
-        productionOrder: testOrderNumber,
+        orderNumber: testOrderNumber,
       }),
     });
     expect(res.status).toBe(200);
 
-    const json = (await res.json()) as { success: boolean; data: { productionOrder: string } };
+    const json = (await res.json()) as { success: boolean; data: { orderNumber: string } };
     expect(json.success).toBe(true);
-    expect(json.data.productionOrder).toBe(testOrderNumber);
+    expect(json.data.orderNumber).toBe(testOrderNumber);
   });
 
   it('Step 5: Verify machine is configured', async () => {
-    const res = await app.request(`/api/machines/${testMachineId}`);
+    const res = await app.request(`/api/work-centers/${testMachineId}`);
     expect(res.status).toBe(200);
 
-    const machine = (await res.json()) as { productionOrder: string | null };
-    expect(machine.productionOrder).toBe(testOrderNumber);
+    const workCenter = (await res.json()) as { currentOrder: { orderNumber: string } | null };
+    expect(workCenter.currentOrder?.orderNumber).toBe(testOrderNumber);
   });
 
   it('Step 6: Complete the order', async () => {
@@ -110,13 +110,13 @@ describe('Integration: Full Production Workflow', () => {
   });
 
   it('Step 7: Clean up - clear machine config', async () => {
-    const res = await app.request(`/api/machines/${testMachineId}/config`, {
+    const res = await app.request(`/api/work-centers/${testMachineId}/assign-order`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ productionOrder: null }),
+      body: JSON.stringify({ orderNumber: null }),
     });
     expect(res.status).toBe(200);
   });

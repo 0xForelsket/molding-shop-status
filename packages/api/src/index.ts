@@ -3,18 +3,18 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { streamSSE } from 'hono/streaming';
 import { db } from './db';
-import { machines } from './db/schema';
+import { workCenters } from './db/schema';
 import { errorHandler } from './middleware/error-handler';
 import { authRoutes } from './routes/auth';
 import { calendarRoutes } from './routes/calendar';
 import downtimeRoutes from './routes/downtime';
-import { machineRoutes } from './routes/machines';
 import { orderRoutes } from './routes/orders';
 import productionLogsRoutes from './routes/production-logs';
 import { referenceRoutes } from './routes/reference';
 import shiftsRoutes from './routes/shifts';
 import { statusRoutes } from './routes/status';
 import uploadRoutes from './routes/upload';
+import { workCenterRoutes } from './routes/work-centers';
 
 const app = new Hono();
 
@@ -44,7 +44,7 @@ app.get('/health', (c) =>
 // ============== ROUTES ==============
 
 app.route('/api/auth', authRoutes);
-app.route('/api/machines', machineRoutes);
+app.route('/api/work-centers', workCenterRoutes);
 app.route('/api/status', statusRoutes);
 app.route('/api/orders', orderRoutes);
 app.route('/api/reference', referenceRoutes);
@@ -59,22 +59,22 @@ app.route('/api/upload', uploadRoutes);
 const OFFLINE_THRESHOLD_SEC = 30;
 
 app.get('/api/summary', async (c) => {
-  const allMachines = await db.select().from(machines);
+  const allWorkCenters = await db.select().from(workCenters);
 
   const now = Date.now();
-  const statuses = allMachines.map((m) => {
+  const statuses = allWorkCenters.map((m) => {
     const lastSeenMs = m.lastSeen ? new Date(m.lastSeen).getTime() : null;
     const secondsSinceSeen = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
     return secondsSinceSeen && secondsSinceSeen > OFFLINE_THRESHOLD_SEC ? 'offline' : m.status;
   });
 
   return c.json({
-    total: allMachines.length,
+    total: allWorkCenters.length,
     running: statuses.filter((s) => s === 'running').length,
     idle: statuses.filter((s) => s === 'idle').length,
     fault: statuses.filter((s) => s === 'fault').length,
     offline: statuses.filter((s) => s === 'offline').length,
-    totalCycles: allMachines.reduce((sum, m) => sum + (m.cycleCount ?? 0), 0),
+    totalCycles: allWorkCenters.reduce((sum, m) => sum + (m.cycleCount ?? 0), 0),
   });
 });
 
@@ -92,13 +92,13 @@ app.get('/api/events', async (c) => {
   return streamSSE(c, async (stream) => {
     try {
       while (!abortController.signal.aborted) {
-        const allMachines = await db.select().from(machines);
+        const allWorkCenters = await db.select().from(workCenters);
 
         if (abortController.signal.aborted) break;
 
         await stream.writeSSE({
-          event: 'machines',
-          data: JSON.stringify(allMachines),
+          event: 'work-centers',
+          data: JSON.stringify(allWorkCenters),
         });
 
         // AbortSignal-aware sleep

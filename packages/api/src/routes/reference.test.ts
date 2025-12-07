@@ -2,21 +2,21 @@ import { describe, expect, it } from 'bun:test';
 import { app } from '../index';
 
 describe('Reference API - Items', () => {
-  it('GET /api/reference/parts should return array', async () => {
-    const res = await app.request('/api/reference/parts');
+  it('GET /api/reference/items should return array', async () => {
+    const res = await app.request('/api/reference/items');
     expect(res.status).toBe(200);
 
     const items = await res.json();
     expect(Array.isArray(items)).toBe(true);
   });
 
-  it('GET /api/reference/parts/:itemNumber should return 404 for unknown item', async () => {
-    const res = await app.request('/api/reference/parts/UNKNOWN-ITEM-12345');
+  it('GET /api/reference/items/:itemNumber should return 404 for unknown item', async () => {
+    const res = await app.request('/api/reference/items/UNKNOWN-ITEM-12345');
     expect(res.status).toBe(404);
   });
 
-  it('POST /api/reference/parts should require auth', async () => {
-    const res = await app.request('/api/reference/parts', {
+  it('POST /api/reference/items should require auth', async () => {
+    const res = await app.request('/api/reference/items', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

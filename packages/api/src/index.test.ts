@@ -17,8 +17,8 @@ describe('Health Check', () => {
 });
 
 describe('Machine API', () => {
-  it('GET /api/machines should return array', async () => {
-    const res = await app.request('/api/machines');
+  it('GET /api/work-centers should return array', async () => {
+    const res = await app.request('/api/work-centers');
     expect(res.status).toBe(200);
 
     const machines = await res.json();
@@ -109,7 +109,7 @@ describe('Orders API', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         orderNumber: 'TEST-001',
-        partNumber: 'TEST-PART',
+        itemNumber: 'TEST-PART',
         quantityRequired: 100,
       }),
     });
