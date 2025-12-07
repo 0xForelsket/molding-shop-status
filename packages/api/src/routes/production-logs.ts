@@ -80,7 +80,9 @@ app.post('/', async (c) => {
   const {
     machineId,
     orderNumber,
-    shiftInstanceId,
+    shiftInstanceId: providedShiftInstanceId,
+    shiftId,
+    productionDate,
     quantityProduced = 0,
     quantityScrap = 0,
     scraps = [], // Array of { reasonId, quantity }
@@ -92,8 +94,73 @@ app.post('/', async (c) => {
   } = body;
 
   // Validate required fields
-  if (!machineId || !orderNumber || !shiftInstanceId) {
-    return c.json({ error: 'machineId, orderNumber, and shiftInstanceId are required' }, 400);
+  if (!machineId || !orderNumber) {
+    return c.json({ error: 'machineId and orderNumber are required' }, 400);
+  }
+
+  // Either shiftInstanceId OR (shiftId + productionDate) must be provided
+  if (!providedShiftInstanceId && (!shiftId || !productionDate)) {
+    return c.json(
+      { error: 'Either shiftInstanceId or (shiftId and productionDate) are required' },
+      400
+    );
+  }
+
+  let shiftInstanceId = providedShiftInstanceId;
+
+  // If shiftInstanceId not provided, resolve or create from shiftId + productionDate
+  if (!shiftInstanceId && shiftId && productionDate) {
+    const dateStr =
+      typeof productionDate === 'string'
+        ? productionDate.split('T')[0]
+        : new Date(productionDate).toISOString().split('T')[0];
+
+    // Look for existing shift instance
+    const existing = await db
+      .select()
+      .from(shiftInstances)
+      .where(
+        and(eq(shiftInstances.shiftTemplateId, shiftId), eq(shiftInstances.productionDate, dateStr))
+      );
+
+    if (existing.length > 0) {
+      shiftInstanceId = existing[0].id;
+    } else {
+      // Get shift template to determine times
+      const [shiftTemplate] = await db.select().from(shifts).where(eq(shifts.id, shiftId));
+
+      if (!shiftTemplate) {
+        return c.json({ error: 'Invalid shiftId' }, 400);
+      }
+
+      const [startHour, startMin] = shiftTemplate.startTime.split(':').map(Number);
+      const [endHour, endMin] = shiftTemplate.endTime.split(':').map(Number);
+
+      const plannedStart = new Date(`${dateStr}T00:00:00`);
+      plannedStart.setHours(startHour, startMin, 0, 0);
+
+      const plannedEnd = new Date(`${dateStr}T00:00:00`);
+      plannedEnd.setHours(endHour, endMin, 0, 0);
+      // Handle overnight shifts
+      if (endHour < startHour) {
+        plannedEnd.setDate(plannedEnd.getDate() + 1);
+      }
+
+      // Create new shift instance
+      const [newInstance] = await db
+        .insert(shiftInstances)
+        .values({
+          shiftTemplateId: shiftId,
+          productionDate: dateStr,
+          plannedStartAt: plannedStart,
+          plannedEndAt: plannedEnd,
+          status: 'active',
+          isOvertime: false,
+        })
+        .returning();
+
+      shiftInstanceId = newInstance.id;
+    }
   }
 
   // Verify shiftInstanceId exists

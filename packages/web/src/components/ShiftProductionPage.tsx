@@ -213,17 +213,29 @@ export function ShiftProductionPage() {
       machineId: number;
       orderNumber: string;
       shiftId: number;
-      shiftDate: string;
+      productionDate: string;
       quantityProduced: number;
       scraps: { reasonId: number; quantity: number }[];
       notes: string;
     }) => {
+      // The API now handles shift instance creation automatically
       const res = await fetch('/api/production-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          machineId: data.machineId,
+          orderNumber: data.orderNumber,
+          shiftId: data.shiftId,
+          productionDate: data.productionDate,
+          quantityProduced: data.quantityProduced,
+          scraps: data.scraps,
+          notes: data.notes,
+        }),
       });
-      if (!res.ok) throw new Error('Failed to create log');
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Failed to create log' }));
+        throw new Error(error.error || 'Failed to create log');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -244,7 +256,7 @@ export function ShiftProductionPage() {
       machineId: selectedMachineId,
       orderNumber: selectedOrderNumber,
       shiftId: selectedShiftId,
-      shiftDate: selectedDate.toISOString(),
+      productionDate: selectedDate.toISOString().split('T')[0],
       quantityProduced,
       scraps: scrapEntries.map(({ reasonId, quantity }) => ({ reasonId, quantity })),
       notes,
