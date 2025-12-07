@@ -10,35 +10,36 @@ beforeAll(async () => {
   authToken = await getAdminToken();
 });
 
-describe('Machines API - Public Endpoints', () => {
-  it('GET /api/machines should return array with machine details', async () => {
+describe('Work Centers API - Public Endpoints', () => {
+  it('GET /api/machines should return array with work center details', async () => {
     const res = await app.request('/api/machines');
     expect(res.status).toBe(200);
 
-    const machines = (await res.json()) as Array<{
-      machineId: number;
-      machineName: string;
+    const workCenters = (await res.json()) as Array<{
+      id: number;
+      name: string;
       status: string;
+      type: string;
     }>;
-    expect(Array.isArray(machines)).toBe(true);
+    expect(Array.isArray(workCenters)).toBe(true);
 
-    if (machines.length > 0) {
-      expect(machines[0]).toHaveProperty('machineId');
-      expect(machines[0]).toHaveProperty('machineName');
-      expect(machines[0]).toHaveProperty('status');
+    if (workCenters.length > 0) {
+      expect(workCenters[0]).toHaveProperty('id');
+      expect(workCenters[0]).toHaveProperty('name');
+      expect(workCenters[0]).toHaveProperty('status');
     }
   });
 
-  it('GET /api/machines/:id should return machine details', async () => {
+  it('GET /api/machines/:id should return work center details', async () => {
     const res = await app.request('/api/machines/1');
     expect(res.status).toBe(200);
 
-    const machine = (await res.json()) as { machineId: number; machineName: string };
-    expect(machine.machineId).toBe(1);
-    expect(machine.machineName).toBeDefined();
+    const wc = (await res.json()) as { id: number; name: string };
+    expect(wc.id).toBe(1);
+    expect(wc.name).toBeDefined();
   });
 
-  it('GET /api/machines/:id should return 404 for unknown machine', async () => {
+  it('GET /api/machines/:id should return 404 for unknown work center', async () => {
     const res = await app.request('/api/machines/99999');
     expect(res.status).toBe(404);
   });
@@ -62,37 +63,37 @@ describe('Machines API - Public Endpoints', () => {
   });
 });
 
-describe('Machines API - Auth Required', () => {
+describe('Work Centers API - Auth Required', () => {
   it('POST /api/machines should require auth', async () => {
     const res = await app.request('/api/machines', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        machineName: 'TEST-MACHINE',
-        machineType: 'injection',
+        name: 'TEST-MACHINE',
+        type: 'injection',
         tonnage: 100,
       }),
     });
     expect(res.status).toBe(401);
   });
 
-  it('POST /api/machines/:id/config should require auth', async () => {
-    const res = await app.request('/api/machines/1/config', {
+  it('POST /api/machines/:id/assign-order should require auth', async () => {
+    const res = await app.request('/api/machines/1/assign-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productionOrder: null }),
+      body: JSON.stringify({ orderNumber: null }),
     });
     expect(res.status).toBe(401);
   });
 
-  it('POST /api/machines/:id/config should clear order with auth', async () => {
-    const res = await app.request('/api/machines/1/config', {
+  it('POST /api/machines/:id/assign-order should clear order with auth', async () => {
+    const res = await app.request('/api/machines/1/assign-order', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ productionOrder: null }),
+      body: JSON.stringify({ orderNumber: null }),
     });
     expect(res.status).toBe(200);
 
@@ -119,7 +120,7 @@ describe('Machines API - Auth Required', () => {
   });
 });
 
-describe('Machines API - Admin Only', () => {
+describe('Work Centers API - Admin Only', () => {
   it('DELETE /api/machines/:id should require auth', async () => {
     const res = await app.request('/api/machines/99999', {
       method: 'DELETE',

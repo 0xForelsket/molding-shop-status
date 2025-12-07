@@ -26,11 +26,11 @@ describe('Orders API - Public Endpoints', () => {
 
     const json = (await res.json()) as {
       orders: unknown[];
-      byPart: unknown[];
+      byItem: unknown[];
       compatibility: object;
     };
     expect(Array.isArray(json.orders)).toBe(true);
-    expect(Array.isArray(json.byPart)).toBe(true);
+    expect(Array.isArray(json.byItem)).toBe(true);
     expect(typeof json.compatibility).toBe('object');
   });
 });
@@ -42,7 +42,7 @@ describe('Orders API - Auth Required', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         orderNumber: 'TEST-001',
-        partNumber: 'TEST-PART',
+        itemNumber: 'TEST-ITEM',
         quantityRequired: 100,
       }),
     });
@@ -58,7 +58,7 @@ describe('Orders API - Auth Required', () => {
       },
       body: JSON.stringify({
         orderNumber: testOrderNumber,
-        partNumber: '130877-T2R', // Actual part from seed data
+        itemNumber: '130877-T2R', // Actual item from seed data
         quantityRequired: 100,
       }),
     });
@@ -78,7 +78,7 @@ describe('Orders API - Auth Required', () => {
       },
       body: JSON.stringify({
         orderNumber: testOrderNumber, // Same as before
-        partNumber: '130877-T2R',
+        itemNumber: '130877-T2R',
         quantityRequired: 50,
       }),
     });
@@ -106,7 +106,7 @@ describe('Orders API - Auth Required', () => {
     expect(json.success).toBe(true);
   });
 
-  it('POST /api/orders/:orderNumber/assign should assign machine', async () => {
+  it('POST /api/orders/:orderNumber/assign should assign work center', async () => {
     const res = await app.request(`/api/orders/${testOrderNumber}/assign`, {
       method: 'POST',
       headers: {
@@ -114,7 +114,7 @@ describe('Orders API - Auth Required', () => {
         Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify({
-        machineId: 1, // Assumes machine 1 exists
+        workCenterId: 1, // Assumes work center 1 exists
       }),
     });
     expect(res.status).toBe(200);

@@ -1,5 +1,5 @@
 // packages/api/src/routes/machines.ts
-// Work Center routes (formerly machines)
+// Work Center routes
 
 import { zValidator } from '@hono/zod-validator';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -16,33 +16,7 @@ const OFFLINE_THRESHOLD_SEC = 30;
 
 // Get all work centers with current order info
 machineRoutes.get('/', async (c) => {
-  // Get all work centers
-  const allWorkCenters = await db
-    .select({
-      // Work center fields
-      machineId: workCenters.id,
-      machineName: workCenters.name,
-      type: workCenters.type,
-      status: workCenters.status,
-      green: workCenters.green,
-      red: workCenters.red,
-      cycleCount: workCenters.cycleCount,
-      inputMode: workCenters.inputMode,
-      statusUpdatedBy: workCenters.statusUpdatedBy,
-      brand: workCenters.brand,
-      model: workCenters.model,
-      serialNo: workCenters.serialNo,
-      tonnage: workCenters.tonnage,
-      screwDiameter: workCenters.screwDiameter,
-      injectionWeight: workCenters.injectionWeight,
-      is2K: workCenters.is2K,
-      floorRow: workCenters.floorRow,
-      floorPosition: workCenters.floorPosition,
-      lastSeen: workCenters.lastSeen,
-      createdAt: workCenters.createdAt,
-    })
-    .from(workCenters)
-    .orderBy(workCenters.id);
+  const allWorkCenters = await db.select().from(workCenters).orderBy(workCenters.id);
 
   // Get active orders for each work center
   const activeOrders = await db
@@ -61,10 +35,7 @@ machineRoutes.get('/', async (c) => {
   const itemNumbers = [...new Set(activeOrders.map((o) => o.itemNumber))];
   const itemData =
     itemNumbers.length > 0
-      ? await db
-          .select({ itemNumber: items.itemNumber, name: items.name, imageUrl: items.imageUrl })
-          .from(items)
-          .where(inArray(items.itemNumber, itemNumbers))
+      ? await db.select().from(items).where(inArray(items.itemNumber, itemNumbers))
       : [];
   const itemMap = new Map(itemData.map((i) => [i.itemNumber, i]));
 
@@ -78,23 +49,27 @@ machineRoutes.get('/', async (c) => {
     const secondsSinceSeen = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
 
     // Find active order for this work center
-    const order = activeOrders.find((o) => o.workCenterId === wc.machineId);
+    const order = activeOrders.find((o) => o.workCenterId === wc.id);
     const item = order ? itemMap.get(order.itemNumber) : null;
-    const routeInfo = order ? routingMap.get(`${wc.machineId}-${order.itemNumber}`) : null;
+    const routeInfo = order ? routingMap.get(`${wc.id}-${order.itemNumber}`) : null;
 
     return {
       ...wc,
       status: secondsSinceSeen && secondsSinceSeen > OFFLINE_THRESHOLD_SEC ? 'offline' : wc.status,
       secondsSinceSeen,
-      // Current order info (derived from production_orders, not stored on work center)
-      productionOrder: order?.orderNumber ?? null,
-      partNumber: order?.itemNumber ?? null,
-      partName: item?.name ?? null,
-      imageUrl: item?.imageUrl ?? null,
-      targetCycleTime: routeInfo?.cycleTime ?? null,
-      partsPerCycle: routeInfo?.outputQty ?? 1,
-      quantityRequired: order?.quantityRequired ?? null,
-      quantityCompleted: order?.quantityCompleted ?? null,
+      // Current order info (derived from production_orders)
+      currentOrder: order
+        ? {
+            orderNumber: order.orderNumber,
+            itemNumber: order.itemNumber,
+            itemName: item?.name ?? null,
+            imageUrl: item?.imageUrl ?? null,
+            cycleTime: routeInfo?.cycleTime ?? null,
+            outputQty: routeInfo?.outputQty ?? 1,
+            quantityRequired: order.quantityRequired,
+            quantityCompleted: order.quantityCompleted,
+          }
+        : null,
     };
   });
 
@@ -127,13 +102,11 @@ machineRoutes.post(
     const id = Number.parseInt(c.req.param('id'));
     const { orderNumber } = c.req.valid('json');
 
-    // Check work center exists
     const wc = await db.select().from(workCenters).where(eq(workCenters.id, id)).limit(1);
     if (wc.length === 0) {
       return c.json({ error: 'Work center not found' }, 404);
     }
 
-    // If no order, unassign current order from this work center
     if (!orderNumber) {
       await db
         .update(productionOrders)
@@ -147,7 +120,6 @@ machineRoutes.post(
       return c.json({ success: true, message: 'Order unassigned' });
     }
 
-    // Look up order
     const order = await db
       .select()
       .from(productionOrders)
@@ -158,13 +130,11 @@ machineRoutes.post(
       return c.json({ error: 'Order not found' }, 404);
     }
 
-    // Update order to assign to this work center
     await db
       .update(productionOrders)
       .set({ workCenterId: id, status: 'assigned' })
       .where(eq(productionOrders.orderNumber, orderNumber));
 
-    // Get routing info for response
     const routeInfo = await db
       .select()
       .from(routing)
@@ -266,7 +236,6 @@ const workCenterSchema = z.object({
   inputMode: z.enum(['auto', 'manual']).optional().default('auto'),
 });
 
-// Create new work center
 machineRoutes.post(
   '/',
   jwtAuth,
@@ -275,29 +244,12 @@ machineRoutes.post(
   async (c) => {
     const data = c.req.valid('json');
 
-    const result = await db
-      .insert(workCenters)
-      .values({
-        name: data.name,
-        type: data.type,
-        brand: data.brand,
-        model: data.model,
-        serialNo: data.serialNo,
-        tonnage: data.tonnage,
-        screwDiameter: data.screwDiameter,
-        injectionWeight: data.injectionWeight,
-        is2K: data.is2K,
-        floorRow: data.floorRow,
-        floorPosition: data.floorPosition,
-        inputMode: data.inputMode,
-      })
-      .returning();
+    const result = await db.insert(workCenters).values(data).returning();
 
     return c.json(result[0], 201);
   }
 );
 
-// Update work center
 machineRoutes.put(
   '/:id',
   jwtAuth,
@@ -318,7 +270,6 @@ machineRoutes.put(
   }
 );
 
-// Delete work center
 machineRoutes.delete('/:id', jwtAuth, requireRole('admin'), async (c) => {
   const id = Number.parseInt(c.req.param('id'));
 
@@ -327,11 +278,8 @@ machineRoutes.delete('/:id', jwtAuth, requireRole('admin'), async (c) => {
     return c.json({ error: 'Work center not found' }, 404);
   }
 
-  // Delete related records first
   await db.delete(statusLogs).where(eq(statusLogs.workCenterId, id));
   await db.delete(routing).where(eq(routing.workCenterId, id));
-
-  // Delete the work center
   await db.delete(workCenters).where(eq(workCenters.id, id));
 
   return c.json({ success: true, deleted: wc[0].name });

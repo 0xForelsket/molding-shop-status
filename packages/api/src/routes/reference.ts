@@ -20,7 +20,7 @@ import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const referenceRoutes = new Hono();
 
-// ============== ITEMS (Parts/Materials) ==============
+// ============== ITEMS ==============
 
 referenceRoutes.get('/parts', async (c) => {
   const allItems = await db.select().from(items).orderBy(items.itemNumber);
@@ -35,7 +35,6 @@ referenceRoutes.get('/parts', async (c) => {
     .from(routing)
     .leftJoin(workCenters, eq(routing.workCenterId, workCenters.id));
 
-  // internal map for faster lookup
   const compatibilityMap = new Map<string, { names: Set<string>; ids: Set<number> }>();
   for (const m of mappings) {
     if (m.itemNumber && m.workCenterName && m.workCenterId) {
@@ -47,116 +46,89 @@ referenceRoutes.get('/parts', async (c) => {
     }
   }
 
-  // Return with backward-compatible field names
   const result = allItems.map((item) => {
     const entry = compatibilityMap.get(item.itemNumber);
     return {
-      partNumber: item.itemNumber,
-      partName: item.name,
-      imageUrl: item.imageUrl,
-      productLine: item.productLine,
-      materialType: item.materialType,
-      createdAt: item.createdAt,
-      compatibleMachines: entry ? Array.from(entry.names).sort() : [],
-      machineIds: entry ? Array.from(entry.ids).sort((a, b) => a - b) : [],
+      ...item,
+      compatibleWorkCenters: entry ? Array.from(entry.names).sort() : [],
+      workCenterIds: entry ? Array.from(entry.ids).sort((a, b) => a - b) : [],
     };
   });
 
   return c.json(result);
 });
 
-referenceRoutes.get('/parts/:partNumber', async (c) => {
-  const itemNumber = c.req.param('partNumber');
+referenceRoutes.get('/parts/:itemNumber', async (c) => {
+  const itemNumber = c.req.param('itemNumber');
   const item = await db.select().from(items).where(eq(items.itemNumber, itemNumber)).limit(1);
 
   if (item.length === 0) {
     return c.json({ error: 'Item not found' }, 404);
   }
 
-  // Get routing for this item
   const routes = await db.select().from(routing).where(eq(routing.itemNumber, itemNumber));
 
-  return c.json({
-    partNumber: item[0].itemNumber,
-    partName: item[0].name,
-    imageUrl: item[0].imageUrl,
-    productLine: item[0].productLine,
-    materialType: item[0].materialType,
-    machines: routes.map((r) => ({
-      machineId: r.workCenterId,
-      partNumber: r.itemNumber,
-      cavityPlan: r.outputQty,
-      targetCycleTime: r.cycleTime,
-    })),
-  });
+  return c.json({ ...item[0], routing: routes });
 });
 
-const partSchema = z.object({
-  partNumber: z.string().min(1),
-  partName: z.string().min(1),
-  imageUrl: z.string().optional().nullable(),
-  productLine: z.string().optional(),
+const itemSchema = z.object({
+  itemNumber: z.string().min(1),
+  name: z.string().min(1),
   materialType: z.enum(['ROH', 'HALB', 'FERT']).optional().default('HALB'),
-  machineIds: z.array(z.number()).optional(),
+  uom: z.string().optional().default('PCS'),
+  productLine: z.string().optional(),
+  imageUrl: z.string().optional().nullable(),
+  partWeight: z.number().optional().nullable(),
+  runnerWeight: z.number().optional().nullable(),
+  workCenterIds: z.array(z.number()).optional(),
 });
 
 referenceRoutes.post(
   '/parts',
   jwtAuth,
   requireRole('admin', 'planner'),
-  zValidator('json', partSchema),
+  zValidator('json', itemSchema),
   async (c) => {
-    const { machineIds, partNumber, partName, ...rest } = c.req.valid('json');
+    const { workCenterIds, ...itemData } = c.req.valid('json');
 
     await db.transaction(async (tx) => {
-      await tx
-        .insert(items)
-        .values({
-          itemNumber: partNumber,
-          name: partName,
-          ...rest,
-        })
-        .onConflictDoNothing();
+      await tx.insert(items).values(itemData).onConflictDoNothing();
 
-      if (machineIds && machineIds.length > 0) {
+      if (workCenterIds && workCenterIds.length > 0) {
         await tx.insert(routing).values(
-          machineIds.map((mid) => ({
-            workCenterId: mid,
-            itemNumber: partNumber,
+          workCenterIds.map((wcId) => ({
+            workCenterId: wcId,
+            itemNumber: itemData.itemNumber,
           }))
         );
       }
     });
 
-    return c.json({ success: true, partNumber });
+    return c.json({ success: true, itemNumber: itemData.itemNumber });
   }
 );
 
 referenceRoutes.patch(
-  '/parts/:partNumber',
+  '/parts/:itemNumber',
   jwtAuth,
   requireRole('admin', 'planner'),
-  zValidator('json', partSchema.partial()),
+  zValidator('json', itemSchema.partial()),
   async (c) => {
-    const itemNumber = c.req.param('partNumber');
-    const { machineIds, partNumber, partName, ...updates } = c.req.valid('json');
+    const itemNumber = c.req.param('itemNumber');
+    const { workCenterIds, ...updates } = c.req.valid('json');
 
     await db.transaction(async (tx) => {
-      const setData: Record<string, unknown> = { ...updates };
-      if (partName) setData.name = partName;
-
-      if (Object.keys(setData).length > 0) {
-        await tx.update(items).set(setData).where(eq(items.itemNumber, itemNumber));
+      if (Object.keys(updates).length > 0) {
+        await tx.update(items).set(updates).where(eq(items.itemNumber, itemNumber));
       }
 
-      if (machineIds !== undefined) {
-        // Replace all routing mappings
+      if (workCenterIds !== undefined) {
         await tx.delete(routing).where(eq(routing.itemNumber, itemNumber));
 
-        if (machineIds.length > 0) {
+        if (workCenterIds.length > 0) {
           await tx.insert(routing).values(
-            machineIds.map((mid) => ({
-              workCenterId: mid,
+            workCenterIds.map((wcId) => ({
+              workCenterId: wcId,
               itemNumber: itemNumber,
             }))
           );
@@ -168,11 +140,9 @@ referenceRoutes.patch(
   }
 );
 
-referenceRoutes.delete('/parts/:partNumber', jwtAuth, requireRole('admin'), async (c) => {
-  const itemNumber = c.req.param('partNumber');
-
+referenceRoutes.delete('/parts/:itemNumber', jwtAuth, requireRole('admin'), async (c) => {
+  const itemNumber = c.req.param('itemNumber');
   await db.delete(items).where(eq(items.itemNumber, itemNumber));
-
   return c.json({ success: true });
 });
 
@@ -200,9 +170,7 @@ referenceRoutes.post(
   zValidator('json', downtimeReasonSchema),
   async (c) => {
     const data = c.req.valid('json');
-
     await db.insert(downtimeReasons).values(data).onConflictDoNothing();
-
     return c.json({ success: true, code: data.code });
   }
 );
@@ -215,9 +183,7 @@ referenceRoutes.patch(
   async (c) => {
     const code = c.req.param('code');
     const updates = c.req.valid('json');
-
     await db.update(downtimeReasons).set(updates).where(eq(downtimeReasons.code, code));
-
     return c.json({ success: true });
   }
 );
@@ -231,7 +197,7 @@ referenceRoutes.get('/shifts', async (c) => {
 
 const shiftSchema = z.object({
   name: z.string().min(1),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/), // HH:MM format
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
   isActive: z.boolean().default(true),
 });
@@ -243,9 +209,7 @@ referenceRoutes.post(
   zValidator('json', shiftSchema),
   async (c) => {
     const data = c.req.valid('json');
-
     const result = await db.insert(shifts).values(data).returning();
-
     return c.json({ success: true, id: result[0].id });
   }
 );
@@ -258,9 +222,7 @@ referenceRoutes.patch(
   async (c) => {
     const id = Number.parseInt(c.req.param('id'));
     const updates = c.req.valid('json');
-
     await db.update(shifts).set(updates).where(eq(shifts.id, id));
-
     return c.json({ success: true });
   }
 );
@@ -285,9 +247,7 @@ referenceRoutes.post(
   zValidator('json', productLineSchema),
   async (c) => {
     const data = c.req.valid('json');
-
     await db.insert(productLines).values(data).onConflictDoNothing();
-
     return c.json({ success: true, code: data.code });
   }
 );
@@ -300,9 +260,7 @@ referenceRoutes.patch(
   async (c) => {
     const code = c.req.param('code');
     const updates = c.req.valid('json');
-
     await db.update(productLines).set(updates).where(eq(productLines.code, code));
-
     return c.json({ success: true });
   }
 );
@@ -332,9 +290,7 @@ referenceRoutes.post(
   zValidator('json', shiftBreakSchema),
   async (c) => {
     const data = c.req.valid('json');
-
     const result = await db.insert(shiftBreaks).values(data).returning();
-
     return c.json({ success: true, id: result[0].id });
   }
 );
@@ -347,9 +303,7 @@ referenceRoutes.patch(
   async (c) => {
     const id = Number.parseInt(c.req.param('id'));
     const updates = c.req.valid('json');
-
     await db.update(shiftBreaks).set(updates).where(eq(shiftBreaks.id, id));
-
     return c.json({ success: true });
   }
 );
@@ -360,9 +314,7 @@ referenceRoutes.delete(
   requireRole('admin', 'line_leader'),
   async (c) => {
     const id = Number.parseInt(c.req.param('id'));
-
     await db.delete(shiftBreaks).where(eq(shiftBreaks.id, id));
-
     return c.json({ success: true });
   }
 );
