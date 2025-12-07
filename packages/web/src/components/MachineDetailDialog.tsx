@@ -43,8 +43,8 @@ async function fetchMachineQueue(workCenterId: number | undefined): Promise<Queu
     .filter((o) => o.order.workCenterId === workCenterId && o.order.status === 'assigned')
     .map((o) => ({
       orderNumber: o.order.orderNumber,
-      partNumber: o.order.itemNumber,
-      partName: o.item?.name ?? null,
+      itemNumber: o.order.itemNumber,
+      itemName: o.item?.name ?? null,
       quantityRequired: o.order.quantityRequired,
       dueDate: o.order.dueDate,
     }));
@@ -192,7 +192,7 @@ export function MachineDetailDialog({ machine, isOpen, onClose }: MachineDetailD
                     <div>
                       <div className="font-bold text-slate-900">{order.orderNumber}</div>
                       <div className="text-sm text-slate-600">
-                        {order.partNumber} - {order.partName}
+                        {order.itemNumber} - {order.itemName}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
