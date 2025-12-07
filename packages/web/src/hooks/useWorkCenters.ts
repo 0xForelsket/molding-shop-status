@@ -1,12 +1,12 @@
 // packages/web/src/hooks/useMachines.ts
 
 import { useQuery } from '@tanstack/react-query';
-import { fetchMachines, fetchSummary } from '../lib/api';
+import { fetchSummary, fetchWorkCenters } from '../lib/api';
 
-export function useMachines() {
+export function useWorkCenters() {
   return useQuery({
-    queryKey: ['machines'],
-    queryFn: fetchMachines,
+    queryKey: ['work-centers'],
+    queryFn: fetchWorkCenters,
     refetchInterval: 2000,
     staleTime: 1000,
   });

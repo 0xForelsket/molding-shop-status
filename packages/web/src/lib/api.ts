@@ -2,28 +2,54 @@
 
 const API_BASE = '/api';
 
-export interface Machine {
-  machineId: number;
-  machineName: string;
+export interface WorkCenter {
+  id: number;
+  name: string;
+  type: string;
   status: 'running' | 'idle' | 'fault' | 'offline';
   green: boolean | null;
   red: boolean | null;
   cycleCount: number | null;
   inputMode: 'auto' | 'manual';
   statusUpdatedBy: string | null;
-  productionOrder: string | null;
-  partNumber: string | null;
-  partName: string | null;
-  targetCycleTime: number | null;
-  partsPerCycle: number | null;
+
+  // Static specs
   brand: string | null;
   model: string | null;
   tonnage: number | null;
   is2K: boolean | null;
+
+  // Location
+  floorRow: 'top' | 'middle' | 'bottom' | null;
+  floorPosition: number | null;
+
   lastSeen: string | null;
-  secondsSinceSeen: number | null;
-  quantityRequired: number | null;
-  quantityCompleted: number | null;
+
+  // Active Order Info
+  currentOrder: {
+    orderNumber: string;
+    itemNumber: string;
+    itemName: string | null;
+    imageUrl: string | null;
+    cycleTime: number | null;
+    outputQty: number;
+    quantityRequired: number;
+    quantityCompleted: number;
+  } | null;
+}
+
+export interface Item {
+  itemNumber: string;
+  name: string;
+  materialType: string;
+  uom: string;
+  productLine: string | null;
+  imageUrl: string | null;
+  partWeight: number | null;
+  runnerWeight: number | null;
+  isActive: boolean;
+  compatibleWorkCenters?: string[];
+  workCenterIds?: number[];
 }
 
 export interface Summary {
@@ -35,9 +61,15 @@ export interface Summary {
   totalCycles: number;
 }
 
-export async function fetchMachines(): Promise<Machine[]> {
-  const res = await fetch(`${API_BASE}/machines`);
-  if (!res.ok) throw new Error('Failed to fetch machines');
+export async function fetchWorkCenters(): Promise<WorkCenter[]> {
+  const res = await fetch(`${API_BASE}/work-centers`);
+  if (!res.ok) throw new Error('Failed to fetch work centers');
+  return res.json();
+}
+
+export async function fetchItems(): Promise<Item[]> {
+  const res = await fetch(`${API_BASE}/reference/items`);
+  if (!res.ok) throw new Error('Failed to fetch items');
   return res.json();
 }
 
