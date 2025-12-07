@@ -4,13 +4,13 @@
 import { db } from '../index';
 import {
   downtimeReasons,
-  machineParts,
-  machines,
-  parts,
+  items,
   productLines,
+  routing,
   shiftBreaks,
   shifts,
   users,
+  workCenters,
 } from '../schema';
 import { ensureShiftSchedule, seedCalendar } from './calendar';
 import { machineSeeds } from './machines';
@@ -80,26 +80,26 @@ async function seed() {
   }
   console.log(`    ✓ ${userSeeds.length} users`);
 
-  // Seed machines
-  console.log('  → Inserting machines...');
-  for (const machine of machineSeeds) {
-    await db.insert(machines).values(machine).onConflictDoNothing();
+  // Seed work centers (formerly machines)
+  console.log('  → Inserting work centers...');
+  for (const wc of machineSeeds) {
+    await db.insert(workCenters).values(wc).onConflictDoNothing();
   }
-  console.log(`    ✓ ${machineSeeds.length} machines`);
+  console.log(`    ✓ ${machineSeeds.length} work centers`);
 
-  // Seed parts
-  console.log('  → Inserting parts...');
-  for (const part of partSeeds) {
-    await db.insert(parts).values(part).onConflictDoNothing();
+  // Seed items (formerly parts)
+  console.log('  → Inserting items...');
+  for (const item of partSeeds) {
+    await db.insert(items).values(item).onConflictDoNothing();
   }
-  console.log(`    ✓ ${partSeeds.length} parts`);
+  console.log(`    ✓ ${partSeeds.length} items`);
 
-  // Seed machine-part relationships
-  console.log('  → Inserting machine-part mappings...');
-  for (const mp of machinePartSeeds) {
-    await db.insert(machineParts).values(mp).onConflictDoNothing();
+  // Seed routing (formerly machine-parts)
+  console.log('  → Inserting routing...');
+  for (const route of machinePartSeeds) {
+    await db.insert(routing).values(route).onConflictDoNothing();
   }
-  console.log(`    ✓ ${machinePartSeeds.length} machine-part mappings`);
+  console.log(`    ✓ ${machinePartSeeds.length} routings`);
 
   // Seed scrap reasons
   await seedScrapReasons();

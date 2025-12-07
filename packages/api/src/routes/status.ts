@@ -1,10 +1,11 @@
 // packages/api/src/routes/status.ts
 
 import { zValidator } from '@hono/zod-validator';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { machines, statusLogs } from '../db/schema';
+import { statusLogs, workCenters } from '../db/schema';
 import { esp32Auth } from '../middleware/auth';
 
 export const statusRoutes = new Hono();
@@ -25,32 +26,42 @@ statusRoutes.post('/', esp32Auth, zValidator('json', statusUpdateSchema), async 
   const data = c.req.valid('json');
   const now = new Date();
 
-  await db
-    .insert(machines)
-    .values({
-      machineId: data.machineId,
-      machineName: data.machineName,
+  // Check if work center exists
+  const existing = await db
+    .select()
+    .from(workCenters)
+    .where(eq(workCenters.id, data.machineId))
+    .limit(1);
+
+  if (existing.length === 0) {
+    // Create new work center
+    await db.insert(workCenters).values({
+      id: data.machineId,
+      name: data.machineName,
       status: data.status,
       green: data.green,
       red: data.red,
       cycleCount: data.cycleCount,
       lastSeen: now,
-    })
-    .onConflictDoUpdate({
-      target: machines.machineId,
-      set: {
-        machineName: data.machineName,
+    });
+  } else {
+    // Update existing work center
+    await db
+      .update(workCenters)
+      .set({
+        name: data.machineName,
         status: data.status,
         green: data.green,
         red: data.red,
         cycleCount: data.cycleCount,
         lastSeen: now,
-      },
-    });
+      })
+      .where(eq(workCenters.id, data.machineId));
+  }
 
   // Log status
   await db.insert(statusLogs).values({
-    machineId: data.machineId,
+    workCenterId: data.machineId,
     status: data.status,
     cycleCount: data.cycleCount,
   });

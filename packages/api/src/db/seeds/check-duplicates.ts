@@ -1,8 +1,8 @@
 import { db } from '../index';
-import { machineParts } from '../schema';
+import { routing } from '../schema';
 
 async function check() {
-  const all = await db.select().from(machineParts);
+  const all = await db.select().from(routing);
   console.log(`Total rows: ${all.length}`);
 
   // simple in-memory check
@@ -10,7 +10,7 @@ async function check() {
   const duplicates = [];
 
   for (const row of all) {
-    const key = `${row.partNumber}-${row.machineId}`;
+    const key = `${row.itemNumber}-${row.workCenterId}`;
     if (seen.has(key)) {
       duplicates.push(key);
     }

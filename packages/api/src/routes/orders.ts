@@ -5,79 +5,111 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { machineParts, machines, parts, productionOrders } from '../db/schema';
+import { items, productionOrders, routing, workCenters } from '../db/schema';
 import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const orderRoutes = new Hono();
 
 // Get all production orders
-// Get all production orders
 orderRoutes.get('/', async (c) => {
   const orders = await db
     .select({
       production_orders: productionOrders,
-      parts: parts,
-      machines: machines,
-      machine_parts: machineParts,
+      parts: items,
+      machines: workCenters,
+      machine_parts: routing,
     })
     .from(productionOrders)
-    .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
-    .leftJoin(machines, eq(productionOrders.machineId, machines.machineId))
+    .leftJoin(items, eq(productionOrders.itemNumber, items.itemNumber))
+    .leftJoin(workCenters, eq(productionOrders.workCenterId, workCenters.id))
     .leftJoin(
-      machineParts,
+      routing,
       and(
-        eq(productionOrders.machineId, machineParts.machineId),
-        eq(productionOrders.partNumber, machineParts.partNumber)
+        eq(productionOrders.workCenterId, routing.workCenterId),
+        eq(productionOrders.itemNumber, routing.itemNumber)
       )
     )
     .orderBy(productionOrders.createdAt);
 
-  return c.json(orders);
+  // Transform to keep API response compatible
+  return c.json(
+    orders.map((o) => ({
+      production_orders: {
+        ...o.production_orders,
+        partNumber: o.production_orders.itemNumber, // Alias for compatibility
+      },
+      parts: o.parts
+        ? {
+            partNumber: o.parts.itemNumber,
+            partName: o.parts.name,
+            imageUrl: o.parts.imageUrl,
+          }
+        : null,
+      machines: o.machines
+        ? {
+            machineId: o.machines.id,
+            machineName: o.machines.name,
+          }
+        : null,
+      machine_parts: o.machine_parts
+        ? {
+            machineId: o.machine_parts.workCenterId,
+            partNumber: o.machine_parts.itemNumber,
+            cavityPlan: o.machine_parts.outputQty,
+            targetCycleTime: o.machine_parts.cycleTime,
+          }
+        : null,
+    }))
+  );
 });
 
-// Get available orders for machine assignment (not completed/cancelled, sorted by order number)
+// Get available orders for machine assignment
 orderRoutes.get('/available', async (c) => {
   const orders = await db
     .select({
       orderNumber: productionOrders.orderNumber,
-      partNumber: productionOrders.partNumber,
-      partName: parts.partName,
+      itemNumber: productionOrders.itemNumber,
+      itemName: items.name,
       quantityRequired: productionOrders.quantityRequired,
       quantityCompleted: productionOrders.quantityCompleted,
       status: productionOrders.status,
     })
     .from(productionOrders)
-    .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
+    .leftJoin(items, eq(productionOrders.itemNumber, items.itemNumber))
     .where(inArray(productionOrders.status, ['pending', 'assigned', 'running']))
     .orderBy(productionOrders.orderNumber);
 
-  // Group by part number for the dropdown
+  // Group by item number
   const byPart = new Map<string, { partName: string | null; orders: typeof orders }>();
   for (const order of orders) {
-    if (!byPart.has(order.partNumber)) {
-      byPart.set(order.partNumber, { partName: order.partName, orders: [] });
+    if (!byPart.has(order.itemNumber)) {
+      byPart.set(order.itemNumber, { partName: order.itemName, orders: [] });
     }
-    byPart.get(order.partNumber)?.orders.push(order);
+    byPart.get(order.itemNumber)?.orders.push(order);
   }
 
   // Fetch compatibility mappings
-  const mappings = await db.select().from(machineParts);
+  const mappings = await db.select().from(routing);
   const compatibility: Record<string, number[]> = {};
 
   for (const m of mappings) {
-    if (!compatibility[m.partNumber]) {
-      compatibility[m.partNumber] = [];
+    if (!compatibility[m.itemNumber]) {
+      compatibility[m.itemNumber] = [];
     }
-    compatibility[m.partNumber].push(m.machineId);
+    compatibility[m.itemNumber].push(m.workCenterId);
   }
 
-  // Return flat list, grouped view, and compatibility map
+  // Return with backward-compatible field names
   return c.json({
-    orders,
-    byPart: Array.from(byPart.entries()).map(([partNumber, data]) => ({
-      partNumber,
+    orders: orders.map((o) => ({
+      ...o,
+      partNumber: o.itemNumber,
+      partName: o.itemName,
+    })),
+    byPart: Array.from(byPart.entries()).map(([itemNumber, data]) => ({
+      partNumber: itemNumber,
       partName: data.partName,
-      lowestOrder: data.orders[0].orderNumber, // First order (lowest) for this part
+      lowestOrder: data.orders[0].orderNumber,
       orderCount: data.orders.length,
     })),
     compatibility,
@@ -87,9 +119,9 @@ orderRoutes.get('/available', async (c) => {
 // Create single production order
 const productionOrderSchema = z.object({
   orderNumber: z.string().min(1),
-  partNumber: z.string().min(1),
+  partNumber: z.string().min(1), // Accept partNumber for backward compatibility
   quantityRequired: z.number().positive(),
-  machineId: z.number().optional(),
+  machineId: z.number().optional(), // Accept machineId for backward compatibility
   dueDate: z.string().optional(),
   targetCycleTime: z.number().positive().optional(),
   targetUtilization: z.number().min(0).max(100).optional(),
@@ -118,9 +150,9 @@ orderRoutes.post(
 
       await db.insert(productionOrders).values({
         orderNumber: data.orderNumber,
-        partNumber: data.partNumber,
+        itemNumber: data.partNumber, // Map partNumber to itemNumber
         quantityRequired: data.quantityRequired,
-        machineId: data.machineId,
+        workCenterId: data.machineId, // Map machineId to workCenterId
         status: data.machineId ? 'assigned' : 'pending',
         dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
         targetCycleTime: data.targetCycleTime,
@@ -136,13 +168,12 @@ orderRoutes.post(
   }
 );
 
-// Bulk import production orders (for Excel paste)
+// Bulk import production orders
 orderRoutes.post('/bulk-import', jwtAuth, requireRole('admin', 'planner'), async (c) => {
   const contentType = c.req.header('Content-Type');
   let orders: { orderNumber: string; partNumber: string; quantity: number }[] = [];
 
   if (contentType?.includes('text/plain')) {
-    // Parse TSV from Excel paste (Order#, Part#, Quantity)
     const text = await c.req.text();
     const lines = text.trim().split('\n');
 
@@ -154,7 +185,6 @@ orderRoutes.post('/bulk-import', jwtAuth, requireRole('admin', 'planner'), async
       }
     }
   } else {
-    // JSON array
     orders = await c.req.json();
   }
 
@@ -177,7 +207,6 @@ orderRoutes.post('/bulk-import', jwtAuth, requireRole('admin', 'planner'), async
   const duplicates = orders.filter((o) => existingSet.has(o.orderNumber));
   const newOrders = orders.filter((o) => !existingSet.has(o.orderNumber));
 
-  // Also check for duplicates within the import itself
   const seenInImport = new Set<string>();
   const duplicatesInImport: string[] = [];
 
@@ -188,14 +217,13 @@ orderRoutes.post('/bulk-import', jwtAuth, requireRole('admin', 'planner'), async
     seenInImport.add(order.orderNumber);
   }
 
-  // Insert valid orders
   const uniqueOrders = newOrders.filter((o) => !duplicatesInImport.includes(o.orderNumber));
 
   if (uniqueOrders.length > 0) {
     await db.insert(productionOrders).values(
       uniqueOrders.map((o) => ({
         orderNumber: o.orderNumber,
-        partNumber: o.partNumber,
+        itemNumber: o.partNumber, // Map partNumber to itemNumber
         quantityRequired: o.quantity,
       }))
     );
@@ -208,7 +236,7 @@ orderRoutes.post('/bulk-import', jwtAuth, requireRole('admin', 'planner'), async
   });
 });
 
-// Assign order to machine
+// Assign order to work center
 orderRoutes.post('/:orderNumber/assign', jwtAuth, requireRole('admin', 'planner'), async (c) => {
   const orderNumber = c.req.param('orderNumber');
   const { machineId } = await c.req.json();
@@ -216,7 +244,7 @@ orderRoutes.post('/:orderNumber/assign', jwtAuth, requireRole('admin', 'planner'
   await db
     .update(productionOrders)
     .set({
-      machineId,
+      workCenterId: machineId, // Map machineId to workCenterId
       status: 'assigned',
     })
     .where(eq(productionOrders.orderNumber, orderNumber));
@@ -228,6 +256,12 @@ orderRoutes.post('/:orderNumber/assign', jwtAuth, requireRole('admin', 'planner'
 orderRoutes.patch('/:orderNumber', jwtAuth, requireRole('admin', 'planner'), async (c) => {
   const orderNumber = c.req.param('orderNumber');
   const updates = await c.req.json();
+
+  // Map machineId to workCenterId if present
+  if (updates.machineId !== undefined) {
+    updates.workCenterId = updates.machineId;
+    updates.machineId = undefined;
+  }
 
   await db
     .update(productionOrders)

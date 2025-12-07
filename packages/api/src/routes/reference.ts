@@ -1,5 +1,5 @@
 // packages/api/src/routes/reference.ts
-// Reference data routes: Parts, Downtime Reasons, Shifts, Product Lines
+// Reference data routes: Items, Routing, Downtime Reasons, Shifts, Product Lines
 
 import { zValidator } from '@hono/zod-validator';
 import { eq } from 'drizzle-orm';
@@ -8,50 +8,55 @@ import { z } from 'zod';
 import { db } from '../db';
 import {
   downtimeReasons,
-  machineParts,
-  machines,
-  parts,
+  items,
   productLines,
+  routing,
   scrapReasons,
   shiftBreaks,
   shifts,
+  workCenters,
 } from '../db/schema';
 import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const referenceRoutes = new Hono();
 
-// ============== PARTS ==============
+// ============== ITEMS (Parts/Materials) ==============
 
 referenceRoutes.get('/parts', async (c) => {
-  const allParts = await db.select().from(parts).orderBy(parts.partNumber);
+  const allItems = await db.select().from(items).orderBy(items.itemNumber);
 
-  // Get compatibility mappings with machine names
+  // Get routing mappings with work center names
   const mappings = await db
     .select({
-      partNumber: machineParts.partNumber,
-      machineName: machines.machineName,
-      machineId: machines.machineId,
+      itemNumber: routing.itemNumber,
+      workCenterName: workCenters.name,
+      workCenterId: workCenters.id,
     })
-    .from(machineParts)
-    .leftJoin(machines, eq(machineParts.machineId, machines.machineId));
+    .from(routing)
+    .leftJoin(workCenters, eq(routing.workCenterId, workCenters.id));
 
   // internal map for faster lookup
   const compatibilityMap = new Map<string, { names: Set<string>; ids: Set<number> }>();
   for (const m of mappings) {
-    if (m.partNumber && m.machineName && m.machineId) {
-      if (!compatibilityMap.has(m.partNumber)) {
-        compatibilityMap.set(m.partNumber, { names: new Set(), ids: new Set() });
+    if (m.itemNumber && m.workCenterName && m.workCenterId) {
+      if (!compatibilityMap.has(m.itemNumber)) {
+        compatibilityMap.set(m.itemNumber, { names: new Set(), ids: new Set() });
       }
-      compatibilityMap.get(m.partNumber)?.names.add(m.machineName);
-      compatibilityMap.get(m.partNumber)?.ids.add(m.machineId);
+      compatibilityMap.get(m.itemNumber)?.names.add(m.workCenterName);
+      compatibilityMap.get(m.itemNumber)?.ids.add(m.workCenterId);
     }
   }
 
-  // Merge
-  const result = allParts.map((p) => {
-    const entry = compatibilityMap.get(p.partNumber);
+  // Return with backward-compatible field names
+  const result = allItems.map((item) => {
+    const entry = compatibilityMap.get(item.itemNumber);
     return {
-      ...p,
+      partNumber: item.itemNumber,
+      partName: item.name,
+      imageUrl: item.imageUrl,
+      productLine: item.productLine,
+      materialType: item.materialType,
+      createdAt: item.createdAt,
       compatibleMachines: entry ? Array.from(entry.names).sort() : [],
       machineIds: entry ? Array.from(entry.ids).sort((a, b) => a - b) : [],
     };
@@ -61,20 +66,29 @@ referenceRoutes.get('/parts', async (c) => {
 });
 
 referenceRoutes.get('/parts/:partNumber', async (c) => {
-  const partNumber = c.req.param('partNumber');
-  const part = await db.select().from(parts).where(eq(parts.partNumber, partNumber)).limit(1);
+  const itemNumber = c.req.param('partNumber');
+  const item = await db.select().from(items).where(eq(items.itemNumber, itemNumber)).limit(1);
 
-  if (part.length === 0) {
-    return c.json({ error: 'Part not found' }, 404);
+  if (item.length === 0) {
+    return c.json({ error: 'Item not found' }, 404);
   }
 
-  // Get machines that can produce this part
-  const capabilities = await db
-    .select()
-    .from(machineParts)
-    .where(eq(machineParts.partNumber, partNumber));
+  // Get routing for this item
+  const routes = await db.select().from(routing).where(eq(routing.itemNumber, itemNumber));
 
-  return c.json({ ...part[0], machines: capabilities });
+  return c.json({
+    partNumber: item[0].itemNumber,
+    partName: item[0].name,
+    imageUrl: item[0].imageUrl,
+    productLine: item[0].productLine,
+    materialType: item[0].materialType,
+    machines: routes.map((r) => ({
+      machineId: r.workCenterId,
+      partNumber: r.itemNumber,
+      cavityPlan: r.outputQty,
+      targetCycleTime: r.cycleTime,
+    })),
+  });
 });
 
 const partSchema = z.object({
@@ -82,7 +96,7 @@ const partSchema = z.object({
   partName: z.string().min(1),
   imageUrl: z.string().optional().nullable(),
   productLine: z.string().optional(),
-  defaultMachineId: z.number().optional(),
+  materialType: z.enum(['ROH', 'HALB', 'FERT']).optional().default('HALB'),
   machineIds: z.array(z.number()).optional(),
 });
 
@@ -92,25 +106,29 @@ referenceRoutes.post(
   requireRole('admin', 'planner'),
   zValidator('json', partSchema),
   async (c) => {
-    const { machineIds, ...partData } = c.req.valid('json');
+    const { machineIds, partNumber, partName, ...rest } = c.req.valid('json');
 
     await db.transaction(async (tx) => {
-      await tx.insert(parts).values(partData).onConflictDoNothing();
+      await tx
+        .insert(items)
+        .values({
+          itemNumber: partNumber,
+          name: partName,
+          ...rest,
+        })
+        .onConflictDoNothing();
 
-      if (machineIds) {
-        // Since it's a new part, we can just insert
-        if (machineIds.length > 0) {
-          await tx.insert(machineParts).values(
-            machineIds.map((mid) => ({
-              machineId: mid,
-              partNumber: partData.partNumber,
-            }))
-          );
-        }
+      if (machineIds && machineIds.length > 0) {
+        await tx.insert(routing).values(
+          machineIds.map((mid) => ({
+            workCenterId: mid,
+            itemNumber: partNumber,
+          }))
+        );
       }
     });
 
-    return c.json({ success: true, partNumber: partData.partNumber });
+    return c.json({ success: true, partNumber });
   }
 );
 
@@ -120,23 +138,26 @@ referenceRoutes.patch(
   requireRole('admin', 'planner'),
   zValidator('json', partSchema.partial()),
   async (c) => {
-    const partNumber = c.req.param('partNumber');
-    const { machineIds, ...updates } = c.req.valid('json');
+    const itemNumber = c.req.param('partNumber');
+    const { machineIds, partNumber, partName, ...updates } = c.req.valid('json');
 
     await db.transaction(async (tx) => {
-      if (Object.keys(updates).length > 0) {
-        await tx.update(parts).set(updates).where(eq(parts.partNumber, partNumber));
+      const setData: Record<string, unknown> = { ...updates };
+      if (partName) setData.name = partName;
+
+      if (Object.keys(setData).length > 0) {
+        await tx.update(items).set(setData).where(eq(items.itemNumber, itemNumber));
       }
 
       if (machineIds !== undefined) {
-        // Replace all mappings
-        await tx.delete(machineParts).where(eq(machineParts.partNumber, partNumber));
+        // Replace all routing mappings
+        await tx.delete(routing).where(eq(routing.itemNumber, itemNumber));
 
         if (machineIds.length > 0) {
-          await tx.insert(machineParts).values(
+          await tx.insert(routing).values(
             machineIds.map((mid) => ({
-              machineId: mid,
-              partNumber: partNumber,
+              workCenterId: mid,
+              itemNumber: itemNumber,
             }))
           );
         }
@@ -148,9 +169,9 @@ referenceRoutes.patch(
 );
 
 referenceRoutes.delete('/parts/:partNumber', jwtAuth, requireRole('admin'), async (c) => {
-  const partNumber = c.req.param('partNumber');
+  const itemNumber = c.req.param('partNumber');
 
-  await db.delete(parts).where(eq(parts.partNumber, partNumber));
+  await db.delete(items).where(eq(items.itemNumber, itemNumber));
 
   return c.json({ success: true });
 });

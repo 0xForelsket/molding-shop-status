@@ -1,11 +1,12 @@
 // packages/api/src/routes/machines.ts
+// Work Center routes (formerly machines)
 
 import { zValidator } from '@hono/zod-validator';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { machineParts, machines, parts, productionOrders, statusLogs } from '../db/schema';
+import { items, productionOrders, routing, statusLogs, workCenters } from '../db/schema';
 import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const machineRoutes = new Hono();
@@ -13,146 +14,171 @@ export const machineRoutes = new Hono();
 // Offline threshold in seconds
 const OFFLINE_THRESHOLD_SEC = 30;
 
-// Get all machines
+// Get all work centers with current order info
 machineRoutes.get('/', async (c) => {
-  const allMachines = await db
+  // Get all work centers
+  const allWorkCenters = await db
     .select({
-      machineId: machines.machineId,
-      machineName: machines.machineName,
-      status: machines.status,
-      green: machines.green,
-      red: machines.red,
-      cycleCount: machines.cycleCount,
-      inputMode: machines.inputMode,
-      statusUpdatedBy: machines.statusUpdatedBy,
-      productionOrder: machines.productionOrder,
-      partNumber: machines.partNumber,
-      partName: machines.partName,
-      targetCycleTime: machines.targetCycleTime,
-      partsPerCycle: machines.partsPerCycle,
-      brand: machines.brand,
-      model: machines.model,
-      serialNo: machines.serialNo,
-      tonnage: machines.tonnage,
-      screwDiameter: machines.screwDiameter,
-      injectionWeight: machines.injectionWeight,
-      is2K: machines.is2K,
-      floorRow: machines.floorRow,
-      floorPosition: machines.floorPosition,
-      lastSeen: machines.lastSeen,
-      createdAt: machines.createdAt,
+      // Work center fields
+      machineId: workCenters.id,
+      machineName: workCenters.name,
+      type: workCenters.type,
+      status: workCenters.status,
+      green: workCenters.green,
+      red: workCenters.red,
+      cycleCount: workCenters.cycleCount,
+      inputMode: workCenters.inputMode,
+      statusUpdatedBy: workCenters.statusUpdatedBy,
+      brand: workCenters.brand,
+      model: workCenters.model,
+      serialNo: workCenters.serialNo,
+      tonnage: workCenters.tonnage,
+      screwDiameter: workCenters.screwDiameter,
+      injectionWeight: workCenters.injectionWeight,
+      is2K: workCenters.is2K,
+      floorRow: workCenters.floorRow,
+      floorPosition: workCenters.floorPosition,
+      lastSeen: workCenters.lastSeen,
+      createdAt: workCenters.createdAt,
+    })
+    .from(workCenters)
+    .orderBy(workCenters.id);
+
+  // Get active orders for each work center
+  const activeOrders = await db
+    .select({
+      workCenterId: productionOrders.workCenterId,
+      orderNumber: productionOrders.orderNumber,
+      itemNumber: productionOrders.itemNumber,
       quantityRequired: productionOrders.quantityRequired,
       quantityCompleted: productionOrders.quantityCompleted,
-      imageUrl: parts.imageUrl,
+      status: productionOrders.status,
     })
-    .from(machines)
-    .leftJoin(productionOrders, eq(machines.productionOrder, productionOrders.orderNumber))
-    .leftJoin(parts, eq(machines.partNumber, parts.partNumber))
-    .orderBy(machines.machineId);
+    .from(productionOrders)
+    .where(inArray(productionOrders.status, ['assigned', 'running']));
+
+  // Get item names for active orders
+  const itemNumbers = [...new Set(activeOrders.map((o) => o.itemNumber))];
+  const itemData =
+    itemNumbers.length > 0
+      ? await db
+          .select({ itemNumber: items.itemNumber, name: items.name, imageUrl: items.imageUrl })
+          .from(items)
+          .where(inArray(items.itemNumber, itemNumbers))
+      : [];
+  const itemMap = new Map(itemData.map((i) => [i.itemNumber, i]));
+
+  // Get routing info (cycle time, output qty)
+  const routingData = await db.select().from(routing);
+  const routingMap = new Map(routingData.map((r) => [`${r.workCenterId}-${r.itemNumber}`, r]));
 
   const now = Date.now();
-  const result = allMachines.map((m) => {
-    const lastSeenMs = m.lastSeen ? new Date(m.lastSeen).getTime() : null;
+  const result = allWorkCenters.map((wc) => {
+    const lastSeenMs = wc.lastSeen ? new Date(wc.lastSeen).getTime() : null;
     const secondsSinceSeen = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
 
+    // Find active order for this work center
+    const order = activeOrders.find((o) => o.workCenterId === wc.machineId);
+    const item = order ? itemMap.get(order.itemNumber) : null;
+    const routeInfo = order ? routingMap.get(`${wc.machineId}-${order.itemNumber}`) : null;
+
     return {
-      ...m,
-      status: secondsSinceSeen && secondsSinceSeen > OFFLINE_THRESHOLD_SEC ? 'offline' : m.status,
+      ...wc,
+      status: secondsSinceSeen && secondsSinceSeen > OFFLINE_THRESHOLD_SEC ? 'offline' : wc.status,
       secondsSinceSeen,
+      // Current order info (derived from production_orders, not stored on work center)
+      productionOrder: order?.orderNumber ?? null,
+      partNumber: order?.itemNumber ?? null,
+      partName: item?.name ?? null,
+      imageUrl: item?.imageUrl ?? null,
+      targetCycleTime: routeInfo?.cycleTime ?? null,
+      partsPerCycle: routeInfo?.outputQty ?? 1,
+      quantityRequired: order?.quantityRequired ?? null,
+      quantityCompleted: order?.quantityCompleted ?? null,
     };
   });
 
   return c.json(result);
 });
 
-// Get single machine
+// Get single work center
 machineRoutes.get('/:id', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
-  const machine = await db.select().from(machines).where(eq(machines.machineId, id)).limit(1);
+  const workCenter = await db.select().from(workCenters).where(eq(workCenters.id, id)).limit(1);
 
-  if (machine.length === 0) {
-    return c.json({ error: 'Machine not found' }, 404);
+  if (workCenter.length === 0) {
+    return c.json({ error: 'Work center not found' }, 404);
   }
 
-  return c.json(machine[0]);
+  return c.json(workCenter[0]);
 });
 
-// Update machine configuration - auto-fills from order and machine_parts
-const machineConfigSchema = z.object({
-  productionOrder: z.string().optional().nullable(),
+// Assign order to work center
+const assignOrderSchema = z.object({
+  orderNumber: z.string().optional().nullable(),
 });
 
 machineRoutes.post(
-  '/:id/config',
+  '/:id/assign-order',
   jwtAuth,
   requireRole('admin', 'planner'),
-  zValidator('json', machineConfigSchema),
+  zValidator('json', assignOrderSchema),
   async (c) => {
     const id = Number.parseInt(c.req.param('id'));
-    const { productionOrder } = c.req.valid('json');
+    const { orderNumber } = c.req.valid('json');
 
-    // If no order, clear machine assignment
-    if (!productionOrder) {
-      await db
-        .update(machines)
-        .set({
-          productionOrder: null,
-          partNumber: null,
-          partName: null,
-          targetCycleTime: null,
-          partsPerCycle: 1,
-        })
-        .where(eq(machines.machineId, id));
-
-      return c.json({ success: true });
+    // Check work center exists
+    const wc = await db.select().from(workCenters).where(eq(workCenters.id, id)).limit(1);
+    if (wc.length === 0) {
+      return c.json({ error: 'Work center not found' }, 404);
     }
 
-    // Look up order to get part number
+    // If no order, unassign current order from this work center
+    if (!orderNumber) {
+      await db
+        .update(productionOrders)
+        .set({ workCenterId: null, status: 'pending' })
+        .where(
+          and(
+            eq(productionOrders.workCenterId, id),
+            inArray(productionOrders.status, ['assigned', 'running'])
+          )
+        );
+      return c.json({ success: true, message: 'Order unassigned' });
+    }
+
+    // Look up order
     const order = await db
       .select()
       .from(productionOrders)
-      .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
-      .where(eq(productionOrders.orderNumber, productionOrder))
+      .where(eq(productionOrders.orderNumber, orderNumber))
       .limit(1);
 
     if (order.length === 0) {
       return c.json({ error: 'Order not found' }, 404);
     }
 
-    const partNumber = order[0].production_orders.partNumber;
-    const partName = order[0].parts?.partName ?? null;
-
-    // Look up machine-specific cycle time for this part
-    const machinePartConfig = await db
-      .select()
-      .from(machineParts)
-      .where(and(eq(machineParts.machineId, id), eq(machineParts.partNumber, partNumber)))
-      .limit(1);
-
-    const targetCycleTime = machinePartConfig[0]?.targetCycleTime ?? null;
-    const cavityPlan = machinePartConfig[0]?.cavityPlan ?? 1;
-
-    // Update machine with all related data
-    await db
-      .update(machines)
-      .set({
-        productionOrder,
-        partNumber,
-        partName,
-        targetCycleTime,
-        partsPerCycle: cavityPlan,
-      })
-      .where(eq(machines.machineId, id));
-
-    // Update order status to 'assigned' and link to machine
+    // Update order to assign to this work center
     await db
       .update(productionOrders)
-      .set({ machineId: id, status: 'assigned' })
-      .where(eq(productionOrders.orderNumber, productionOrder));
+      .set({ workCenterId: id, status: 'assigned' })
+      .where(eq(productionOrders.orderNumber, orderNumber));
+
+    // Get routing info for response
+    const routeInfo = await db
+      .select()
+      .from(routing)
+      .where(and(eq(routing.workCenterId, id), eq(routing.itemNumber, order[0].itemNumber)))
+      .limit(1);
 
     return c.json({
       success: true,
-      data: { productionOrder, partNumber, partName, targetCycleTime, partsPerCycle: cavityPlan },
+      data: {
+        orderNumber,
+        itemNumber: order[0].itemNumber,
+        cycleTime: routeInfo[0]?.cycleTime ?? null,
+        outputQty: routeInfo[0]?.outputQty ?? 1,
+      },
     });
   }
 );
@@ -173,32 +199,30 @@ machineRoutes.post(
     const id = Number.parseInt(c.req.param('id'));
     const data = c.req.valid('json');
 
-    // Check if machine is in manual mode
-    const machine = await db.select().from(machines).where(eq(machines.machineId, id)).limit(1);
+    const wc = await db.select().from(workCenters).where(eq(workCenters.id, id)).limit(1);
 
-    if (machine.length === 0) {
-      return c.json({ error: 'Machine not found' }, 404);
+    if (wc.length === 0) {
+      return c.json({ error: 'Work center not found' }, 404);
     }
 
-    if (machine[0].inputMode !== 'manual') {
-      return c.json({ error: 'Machine is in auto mode. Change to manual mode first.' }, 400);
+    if (wc[0].inputMode !== 'manual') {
+      return c.json({ error: 'Work center is in auto mode. Change to manual mode first.' }, 400);
     }
 
     await db
-      .update(machines)
+      .update(workCenters)
       .set({
         status: data.status,
         statusUpdatedBy: data.updatedBy,
-        cycleCount: data.cycleCount ?? machine[0].cycleCount,
+        cycleCount: data.cycleCount ?? wc[0].cycleCount,
         lastSeen: new Date(),
       })
-      .where(eq(machines.machineId, id));
+      .where(eq(workCenters.id, id));
 
-    // Log the status change
     await db.insert(statusLogs).values({
-      machineId: id,
+      workCenterId: id,
       status: data.status,
-      cycleCount: data.cycleCount ?? machine[0].cycleCount,
+      cycleCount: data.cycleCount ?? wc[0].cycleCount,
     });
 
     return c.json({ success: true });
@@ -219,7 +243,7 @@ machineRoutes.post(
     const id = Number.parseInt(c.req.param('id'));
     const { mode } = c.req.valid('json');
 
-    await db.update(machines).set({ inputMode: mode }).where(eq(machines.machineId, id));
+    await db.update(workCenters).set({ inputMode: mode }).where(eq(workCenters.id, id));
 
     return c.json({ success: true, mode });
   }
@@ -227,9 +251,9 @@ machineRoutes.post(
 
 // ============== CRUD OPERATIONS ==============
 
-// Schema for creating/updating machines
-const machineSchema = z.object({
-  machineName: z.string().min(1),
+const workCenterSchema = z.object({
+  name: z.string().min(1),
+  type: z.enum(['injection', 'assembly', 'other']).optional().default('injection'),
   brand: z.string().optional().nullable(),
   model: z.string().optional().nullable(),
   serialNo: z.string().optional().nullable(),
@@ -242,19 +266,20 @@ const machineSchema = z.object({
   inputMode: z.enum(['auto', 'manual']).optional().default('auto'),
 });
 
-// Create new machine
+// Create new work center
 machineRoutes.post(
   '/',
   jwtAuth,
   requireRole('admin'),
-  zValidator('json', machineSchema),
+  zValidator('json', workCenterSchema),
   async (c) => {
     const data = c.req.valid('json');
 
     const result = await db
-      .insert(machines)
+      .insert(workCenters)
       .values({
-        machineName: data.machineName,
+        name: data.name,
+        type: data.type,
         brand: data.brand,
         model: data.model,
         serialNo: data.serialNo,
@@ -272,46 +297,42 @@ machineRoutes.post(
   }
 );
 
-// Update machine
+// Update work center
 machineRoutes.put(
   '/:id',
   jwtAuth,
   requireRole('admin'),
-  zValidator('json', machineSchema.partial()),
+  zValidator('json', workCenterSchema.partial()),
   async (c) => {
     const id = Number.parseInt(c.req.param('id'));
     const data = c.req.valid('json');
 
-    const machine = await db.select().from(machines).where(eq(machines.machineId, id)).limit(1);
-    if (machine.length === 0) {
-      return c.json({ error: 'Machine not found' }, 404);
+    const wc = await db.select().from(workCenters).where(eq(workCenters.id, id)).limit(1);
+    if (wc.length === 0) {
+      return c.json({ error: 'Work center not found' }, 404);
     }
 
-    const result = await db
-      .update(machines)
-      .set(data)
-      .where(eq(machines.machineId, id))
-      .returning();
+    const result = await db.update(workCenters).set(data).where(eq(workCenters.id, id)).returning();
 
     return c.json(result[0]);
   }
 );
 
-// Delete machine
+// Delete work center
 machineRoutes.delete('/:id', jwtAuth, requireRole('admin'), async (c) => {
   const id = Number.parseInt(c.req.param('id'));
 
-  const machine = await db.select().from(machines).where(eq(machines.machineId, id)).limit(1);
-  if (machine.length === 0) {
-    return c.json({ error: 'Machine not found' }, 404);
+  const wc = await db.select().from(workCenters).where(eq(workCenters.id, id)).limit(1);
+  if (wc.length === 0) {
+    return c.json({ error: 'Work center not found' }, 404);
   }
 
   // Delete related records first
-  await db.delete(statusLogs).where(eq(statusLogs.machineId, id));
-  await db.delete(machineParts).where(eq(machineParts.machineId, id));
+  await db.delete(statusLogs).where(eq(statusLogs.workCenterId, id));
+  await db.delete(routing).where(eq(routing.workCenterId, id));
 
-  // Delete the machine
-  await db.delete(machines).where(eq(machines.machineId, id));
+  // Delete the work center
+  await db.delete(workCenters).where(eq(workCenters.id, id));
 
-  return c.json({ success: true, deleted: machine[0].machineName });
+  return c.json({ success: true, deleted: wc[0].name });
 });

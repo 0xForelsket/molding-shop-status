@@ -4,13 +4,13 @@ import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db';
 import {
-  machines,
-  parts,
+  items,
   productionLogScraps,
   productionLogs,
   productionOrders,
   shiftInstances,
   shifts,
+  workCenters,
 } from '../db/schema';
 
 const app = new Hono();
@@ -25,16 +25,16 @@ app.get('/', async (c) => {
     .select({
       productionLog: productionLogs,
       machine: {
-        machineId: machines.machineId,
-        machineName: machines.machineName,
+        machineId: workCenters.id,
+        machineName: workCenters.name,
       },
       order: {
         orderNumber: productionOrders.orderNumber,
-        partNumber: productionOrders.partNumber,
+        partNumber: productionOrders.itemNumber,
         quantityRequired: productionOrders.quantityRequired,
       },
       part: {
-        partName: parts.partName,
+        partName: items.name,
       },
       shiftInstance: {
         id: shiftInstances.id,
@@ -45,16 +45,16 @@ app.get('/', async (c) => {
       },
     })
     .from(productionLogs)
-    .leftJoin(machines, eq(productionLogs.machineId, machines.machineId))
+    .leftJoin(workCenters, eq(productionLogs.workCenterId, workCenters.id))
     .leftJoin(productionOrders, eq(productionLogs.orderNumber, productionOrders.orderNumber))
-    .leftJoin(parts, eq(productionOrders.partNumber, parts.partNumber))
+    .leftJoin(items, eq(productionOrders.itemNumber, items.itemNumber))
     .leftJoin(shiftInstances, eq(productionLogs.shiftInstanceId, shiftInstances.id))
     .leftJoin(shifts, eq(shiftInstances.shiftTemplateId, shifts.id));
 
   const conditions = [];
 
   if (machineId) {
-    conditions.push(eq(productionLogs.machineId, Number.parseInt(machineId)));
+    conditions.push(eq(productionLogs.workCenterId, Number.parseInt(machineId)));
   }
 
   if (productionDate) {
@@ -120,7 +120,7 @@ app.post('/', async (c) => {
     const [log] = await tx
       .insert(productionLogs)
       .values({
-        machineId,
+        workCenterId: machineId, // Map machineId to workCenterId
         orderNumber,
         shiftInstanceId,
         quantityProduced,
@@ -155,14 +155,13 @@ app.post('/', async (c) => {
         .where(eq(productionOrders.orderNumber, orderNumber));
     }
 
-    // Update machine status and production order
+    // Update work center status
     await tx
-      .update(machines)
+      .update(workCenters)
       .set({
         status: 'running',
-        productionOrder: orderNumber,
       })
-      .where(eq(machines.machineId, machineId));
+      .where(eq(workCenters.id, machineId));
 
     return log;
   });
@@ -211,15 +210,14 @@ app.patch('/:id', async (c) => {
     }
   }
 
-  // If status is 'completed', update machine to idle
+  // If status is 'completed', update work center to idle
   if (body.status === 'completed') {
     await db
-      .update(machines)
+      .update(workCenters)
       .set({
         status: 'idle',
-        productionOrder: null,
       })
-      .where(eq(machines.machineId, existingLog.machineId));
+      .where(eq(workCenters.id, existingLog.workCenterId));
   }
 
   return c.json(updatedLog);
@@ -231,14 +229,14 @@ app.get('/today-summary', async (c) => {
 
   const summary = await db
     .select({
-      machineId: productionLogs.machineId,
+      machineId: productionLogs.workCenterId,
       totalProduced: sql<number>`SUM(${productionLogs.quantityProduced})`,
       totalScrap: sql<number>`SUM(${productionLogs.quantityScrap})`,
     })
     .from(productionLogs)
     .leftJoin(shiftInstances, eq(productionLogs.shiftInstanceId, shiftInstances.id))
     .where(sql`DATE(${shiftInstances.productionDate}) = ${today}`)
-    .groupBy(productionLogs.machineId);
+    .groupBy(productionLogs.workCenterId);
 
   return c.json(summary);
 });

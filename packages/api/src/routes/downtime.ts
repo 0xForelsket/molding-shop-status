@@ -3,7 +3,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db';
-import { downtimeLogs, downtimeReasons, machines, shiftInstances, shifts } from '../db/schema';
+import { downtimeLogs, downtimeReasons, shiftInstances, shifts, workCenters } from '../db/schema';
 
 const app = new Hono();
 
@@ -21,8 +21,8 @@ app.get('/', async (c) => {
         category: downtimeReasons.category,
       },
       machine: {
-        machineId: machines.machineId,
-        machineName: machines.machineName,
+        machineId: workCenters.id,
+        machineName: workCenters.name,
       },
       shiftInstance: {
         id: shiftInstances.id,
@@ -34,14 +34,14 @@ app.get('/', async (c) => {
     })
     .from(downtimeLogs)
     .leftJoin(downtimeReasons, eq(downtimeLogs.reasonCode, downtimeReasons.code))
-    .leftJoin(machines, eq(downtimeLogs.machineId, machines.machineId))
+    .leftJoin(workCenters, eq(downtimeLogs.workCenterId, workCenters.id))
     .leftJoin(shiftInstances, eq(downtimeLogs.shiftInstanceId, shiftInstances.id))
     .leftJoin(shifts, eq(shiftInstances.shiftTemplateId, shifts.id));
 
   const conditions = [];
 
   if (machineId) {
-    conditions.push(eq(downtimeLogs.machineId, Number.parseInt(machineId)));
+    conditions.push(eq(downtimeLogs.workCenterId, Number.parseInt(machineId)));
   }
 
   if (productionDate) {
@@ -79,7 +79,7 @@ app.post('/', async (c) => {
   const [newLog] = await db
     .insert(downtimeLogs)
     .values({
-      machineId,
+      workCenterId: machineId, // Map machineId to workCenterId
       reasonCode,
       shiftInstanceId: shiftInstanceId || null,
       notes: notes || null,
@@ -92,7 +92,7 @@ app.post('/', async (c) => {
   return c.json(newLog, 201);
 });
 
-// PATCH /downtime/:id - Update a downtime log (e.g., to set end time)
+// PATCH /downtime/:id - Update a downtime log
 app.patch('/:id', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
   const body = await c.req.json();
@@ -146,7 +146,7 @@ app.get('/summary', async (c) => {
   const conditions = [];
 
   if (machineId) {
-    conditions.push(eq(downtimeLogs.machineId, Number.parseInt(machineId)));
+    conditions.push(eq(downtimeLogs.workCenterId, Number.parseInt(machineId)));
   }
 
   if (productionDate) {

@@ -2,11 +2,12 @@
 
 import { boolean, integer, pgTable, real, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
-// ============== MACHINES ==============
+// ============== WORK CENTERS (formerly machines) ==============
 
-export const machines = pgTable('machines', {
-  machineId: serial('machine_id').primaryKey(),
-  machineName: text('machine_name').notNull(),
+export const workCenters = pgTable('work_centers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  type: text('type').default('injection').notNull(), // 'injection', 'assembly', 'other'
   status: text('status').default('offline').notNull(), // 'running', 'idle', 'fault', 'offline'
   green: boolean('green').default(false),
   red: boolean('red').default(false),
@@ -16,14 +17,7 @@ export const machines = pgTable('machines', {
   inputMode: text('input_mode').default('auto').notNull(),
   statusUpdatedBy: text('status_updated_by'),
 
-  // Production Order Details (editable per shift)
-  productionOrder: text('production_order'),
-  partNumber: text('part_number'),
-  partName: text('part_name'),
-  targetCycleTime: real('target_cycle_time'),
-  partsPerCycle: integer('parts_per_cycle').default(1),
-
-  // Machine Specifications (static)
+  // Work Center Specifications (static)
   brand: text('brand'),
   model: text('model'),
   serialNo: text('serial_no'),
@@ -40,57 +34,98 @@ export const machines = pgTable('machines', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Legacy alias for backwards compatibility during migration
+export const machines = workCenters;
+
 // ============== STATUS LOGS ==============
 
 export const statusLogs = pgTable('status_logs', {
   id: serial('id').primaryKey(),
-  machineId: integer('machine_id')
-    .references(() => machines.machineId)
+  workCenterId: integer('work_center_id')
+    .references(() => workCenters.id)
     .notNull(),
   status: text('status').notNull(),
   cycleCount: integer('cycle_count'),
   timestamp: timestamp('timestamp').defaultNow(),
 });
 
-// ============== PARTS ==============
+// ============== ITEMS (formerly parts) ==============
 
-export const parts = pgTable('parts', {
-  partNumber: text('part_number').primaryKey(),
-  partName: text('part_name').notNull(),
-  imageUrl: text('image_url'),
+export const items = pgTable('items', {
+  itemNumber: text('item_number').primaryKey(),
+  name: text('name').notNull(),
+  materialType: text('material_type').notNull().default('HALB'), // 'ROH', 'HALB', 'FERT'
+  uom: text('uom').default('PCS'), // Unit of measure: PCS, KG, G
   productLine: text('product_line'),
-  defaultMachineId: integer('default_machine_id').references(() => machines.machineId),
+  imageUrl: text('image_url'),
+
+  // Physical properties (for HALB/FERT)
+  partWeight: real('part_weight'), // grams
+  runnerWeight: real('runner_weight'), // grams
+
+  // Material properties (for ROH)
+  supplier: text('supplier'),
+  density: real('density'),
+  meltTemp: real('melt_temp'),
+
+  isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// ============== MACHINE-PART CAPABILITIES ==============
+// Legacy alias for backwards compatibility
+export const parts = items;
 
-export const machineParts = pgTable('machine_parts', {
+// ============== BOM (Bill of Materials) ==============
+
+export const bom = pgTable('bom', {
   id: serial('id').primaryKey(),
-  machineId: integer('machine_id')
-    .references(() => machines.machineId)
+  parentItem: text('parent_item')
+    .references(() => items.itemNumber)
     .notNull(),
-  partNumber: text('part_number')
-    .references(() => parts.partNumber)
+  childItem: text('child_item')
+    .references(() => items.itemNumber)
     .notNull(),
-  cavityPlan: integer('cavity_plan').default(1),
-  targetCycleTime: real('target_cycle_time'),
+  quantity: real('quantity').notNull(),
+  uom: text('uom'), // matches child's UOM
+  notes: text('notes'),
 });
+
+// ============== ROUTING (formerly machine_parts) ==============
+
+export const routing = pgTable('routing', {
+  id: serial('id').primaryKey(),
+  workCenterId: integer('work_center_id')
+    .references(() => workCenters.id)
+    .notNull(),
+  itemNumber: text('item_number')
+    .references(() => items.itemNumber)
+    .notNull(),
+  cycleTime: real('cycle_time'), // seconds
+  outputQty: integer('output_qty').default(1), // parts per cycle (was cavity_plan)
+  moldId: text('mold_id'),
+  setupTime: integer('setup_time'), // minutes
+  runnerType: text('runner_type'), // 'hot', 'cold'
+  gateType: text('gate_type'),
+  notes: text('notes'),
+});
+
+// Legacy alias for backwards compatibility
+export const machineParts = routing;
 
 // ============== PRODUCTION ORDERS ==============
 
 export const productionOrders = pgTable('production_orders', {
   orderNumber: text('order_number').primaryKey(),
-  partNumber: text('part_number')
-    .references(() => parts.partNumber)
+  itemNumber: text('item_number')
+    .references(() => items.itemNumber)
     .notNull(),
   quantityRequired: integer('quantity_required').notNull(),
   quantityCompleted: integer('quantity_completed').default(0),
-  machineId: integer('machine_id').references(() => machines.machineId),
+  workCenterId: integer('work_center_id').references(() => workCenters.id),
   status: text('status').default('pending'), // 'pending', 'assigned', 'running', 'completed', 'cancelled'
 
   // Planning Fields
-  targetCycleTime: real('target_cycle_time'), // Override machine default
+  targetCycleTime: real('target_cycle_time'), // Override routing default
   targetUtilization: integer('target_utilization'), // e.g. 90%
   dueDate: timestamp('due_date'),
   notes: text('notes'),
@@ -116,10 +151,9 @@ export const shiftBreaks = pgTable('shift_breaks', {
   shiftId: integer('shift_id')
     .notNull()
     .references(() => shifts.id),
-  name: text('name').notNull(), // e.g., 'Lunch', 'Morning Break'
-  startTime: text('start_time').notNull(), // e.g., '12:30' (time of day)
-  endTime: text('end_time').notNull(), // e.g., '13:30' (time of day)
-  // Duration is auto-calculated from start/end times
+  name: text('name').notNull(),
+  startTime: text('start_time').notNull(),
+  endTime: text('end_time').notNull(),
   isActive: boolean('is_active').default(true),
 });
 
@@ -127,9 +161,9 @@ export const shiftBreaks = pgTable('shift_breaks', {
 
 export const plantCalendar = pgTable('plant_calendar', {
   date: text('date').primaryKey(), // YYYY-MM-DD format
-  dayType: text('day_type').notNull().default('working'), // 'working', 'weekend', 'holiday', 'shutdown', 'special'
+  dayType: text('day_type').notNull().default('working'),
   weekNum: integer('week_num'),
-  name: text('name'), // e.g., 'Christmas', 'Annual Maintenance'
+  name: text('name'),
   notes: text('notes'),
 });
 
@@ -147,7 +181,7 @@ export const shiftInstances = pgTable('shift_instances', {
   plannedEndAt: timestamp('planned_end_at').notNull(),
   actualStartAt: timestamp('actual_start_at'),
   actualEndAt: timestamp('actual_end_at'),
-  status: text('status').default('scheduled'), // 'scheduled', 'active', 'completed', 'cancelled'
+  status: text('status').default('scheduled'),
   isOvertime: boolean('is_overtime').default(false),
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -163,7 +197,6 @@ export const shiftInstanceBreaks = pgTable('shift_instance_breaks', {
   name: text('name').notNull(),
   startTime: timestamp('start_time').notNull(),
   endTime: timestamp('end_time').notNull(),
-  // Duration is auto-calculated from start/end times
 });
 
 // ============== DOWNTIME REASONS ==============
@@ -171,7 +204,7 @@ export const shiftInstanceBreaks = pgTable('shift_instance_breaks', {
 export const downtimeReasons = pgTable('downtime_reasons', {
   code: text('code').primaryKey(),
   name: text('name').notNull(),
-  category: text('category').notNull(), // 'planned' or 'unplanned'
+  category: text('category').notNull(),
   isActive: boolean('is_active').default(true),
 });
 
@@ -179,8 +212,8 @@ export const downtimeReasons = pgTable('downtime_reasons', {
 
 export const downtimeLogs = pgTable('downtime_logs', {
   id: serial('id').primaryKey(),
-  machineId: integer('machine_id')
-    .references(() => machines.machineId)
+  workCenterId: integer('work_center_id')
+    .references(() => workCenters.id)
     .notNull(),
   reasonCode: text('reason_code')
     .references(() => downtimeReasons.code)
@@ -207,7 +240,7 @@ export const users = pgTable('users', {
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash'),
   name: text('name').notNull(),
-  role: text('role').notNull(), // 'admin', 'planner', 'line_leader', 'viewer'
+  role: text('role').notNull(),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   lastLoginAt: timestamp('last_login_at'),
@@ -215,11 +248,24 @@ export const users = pgTable('users', {
 
 // ============== TYPE EXPORTS ==============
 
-export type Machine = typeof machines.$inferSelect;
-export type NewMachine = typeof machines.$inferInsert;
+export type WorkCenter = typeof workCenters.$inferSelect;
+export type NewWorkCenter = typeof workCenters.$inferInsert;
+export type Machine = WorkCenter; // Legacy alias
+export type NewMachine = NewWorkCenter; // Legacy alias
+
 export type StatusLog = typeof statusLogs.$inferSelect;
-export type Part = typeof parts.$inferSelect;
-export type MachinePart = typeof machineParts.$inferSelect;
+
+export type Item = typeof items.$inferSelect;
+export type NewItem = typeof items.$inferInsert;
+export type Part = Item; // Legacy alias
+
+export type Bom = typeof bom.$inferSelect;
+export type NewBom = typeof bom.$inferInsert;
+
+export type Routing = typeof routing.$inferSelect;
+export type NewRouting = typeof routing.$inferInsert;
+export type MachinePart = Routing; // Legacy alias
+
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 export type Shift = typeof shifts.$inferSelect;
 export type ShiftBreak = typeof shiftBreaks.$inferSelect;
@@ -235,8 +281,8 @@ export type User = typeof users.$inferSelect;
 
 export const productionLogs = pgTable('production_logs', {
   id: serial('id').primaryKey(),
-  machineId: integer('machine_id')
-    .references(() => machines.machineId)
+  workCenterId: integer('work_center_id')
+    .references(() => workCenters.id)
     .notNull(),
   orderNumber: text('order_number')
     .references(() => productionOrders.orderNumber)
@@ -245,18 +291,14 @@ export const productionLogs = pgTable('production_logs', {
     .references(() => shiftInstances.id)
     .notNull(),
 
-  // Production counts
   quantityProduced: integer('quantity_produced').default(0),
   quantityScrap: integer('quantity_scrap').default(0),
 
-  // Timing
   startedAt: timestamp('started_at'),
   endedAt: timestamp('ended_at'),
 
-  // Status for this shift entry
-  status: text('status').default('in_progress'), // 'in_progress', 'completed'
+  status: text('status').default('in_progress'),
 
-  // Operator info
   loggedBy: text('logged_by'),
   notes: text('notes'),
 
@@ -270,9 +312,9 @@ export type NewProductionLog = typeof productionLogs.$inferInsert;
 
 export const scrapReasons = pgTable('scrap_reasons', {
   id: serial('id').primaryKey(),
-  code: text('code').notNull().unique(), // e.g., 'SCRATCH', 'SHORT'
-  name: text('name').notNull(), // e.g., 'Scratch', 'Short Mold'
-  category: text('category').notNull().default('general'), // e.g., 'visual', 'process'
+  code: text('code').notNull().unique(),
+  name: text('name').notNull(),
+  category: text('category').notNull().default('general'),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
 });

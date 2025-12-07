@@ -5,8 +5,8 @@ export const machineSeeds = [
   // ==================== TOP ROW (near main conveyor) ====================
   // Layout: IM12, IM11, IM06, IM05, IM04, IM03, IM02, IM01
   {
-    machineId: 1,
-    machineName: 'IM01',
+    id: 1,
+    name: 'IM01',
     brand: 'HAITIAN',
     model: 'MA1600II',
     serialNo: '201810016050342',
@@ -18,8 +18,8 @@ export const machineSeeds = [
     floorPosition: 8,
   },
   {
-    machineId: 2,
-    machineName: 'IM02',
+    id: 2,
+    name: 'IM02',
     brand: 'HAITIAN',
     model: 'MA1600II',
     serialNo: '201810016050341',
@@ -31,8 +31,8 @@ export const machineSeeds = [
     floorPosition: 7,
   },
   {
-    machineId: 3,
-    machineName: 'IM03',
+    id: 3,
+    name: 'IM03',
     brand: 'HAITIAN',
     model: 'MA1200II',
     serialNo: '201810012050238',
@@ -44,8 +44,8 @@ export const machineSeeds = [
     floorPosition: 6,
   },
   {
-    machineId: 4,
-    machineName: 'IM04',
+    id: 4,
+    name: 'IM04',
     brand: 'HAITIAN',
     model: 'MA1200II',
     serialNo: '201810012050239',
@@ -57,8 +57,8 @@ export const machineSeeds = [
     floorPosition: 5,
   },
   {
-    machineId: 5,
-    machineName: 'IM05',
+    id: 5,
+    name: 'IM05',
     brand: 'HAITIAN',
     model: 'MA900II',
     serialNo: '201810009050160',
@@ -70,8 +70,8 @@ export const machineSeeds = [
     floorPosition: 4,
   },
   {
-    machineId: 6,
-    machineName: 'IM06',
+    id: 6,
+    name: 'IM06',
     brand: 'HAITIAN',
     model: 'MA900II',
     serialNo: '201810009050159',
@@ -83,8 +83,8 @@ export const machineSeeds = [
     floorPosition: 3,
   },
   {
-    machineId: 11,
-    machineName: 'IM11',
+    id: 11,
+    name: 'IM11',
     brand: 'ZHAFIR',
     model: 'VE1500III-300',
     serialNo: '202215015007475',
@@ -96,8 +96,8 @@ export const machineSeeds = [
     floorPosition: 2,
   },
   {
-    machineId: 12,
-    machineName: 'IM12',
+    id: 12,
+    name: 'IM12',
     brand: 'ZHAFIR',
     model: 'VE1500III-300',
     serialNo: '202215015007474',
@@ -112,8 +112,8 @@ export const machineSeeds = [
   // ==================== MIDDLE ROW ====================
   // Layout: IM17, IM18, IM16, IM15, IM10, IM09
   {
-    machineId: 17,
-    machineName: 'IM17',
+    id: 17,
+    name: 'IM17',
     brand: 'ZHAFIR',
     model: 'VE1900V-430H',
     serialNo: '202415019001782',
@@ -125,8 +125,8 @@ export const machineSeeds = [
     floorPosition: 1,
   },
   {
-    machineId: 18,
-    machineName: 'IM18',
+    id: 18,
+    name: 'IM18',
     brand: 'ENGEL',
     model: 'VICTORY 500H/200W/180 COMBI PRO',
     serialNo: '178509',
@@ -138,8 +138,8 @@ export const machineSeeds = [
     floorPosition: 2,
   },
   {
-    machineId: 16,
-    machineName: 'IM16',
+    id: 16,
+    name: 'IM16',
     brand: 'ENGEL',
     model: 'VICTORY 460H/210W/180 COMBI',
     serialNo: '266117',
@@ -151,8 +151,8 @@ export const machineSeeds = [
     floorPosition: 3,
   },
   {
-    machineId: 15,
-    machineName: 'IM15',
+    id: 15,
+    name: 'IM15',
     brand: 'HAITIAN',
     model: 'IA1600II/B-J',
     serialNo: '201816016016475',
@@ -164,8 +164,8 @@ export const machineSeeds = [
     floorPosition: 4,
   },
   {
-    machineId: 10,
-    machineName: 'IM10',
+    id: 10,
+    name: 'IM10',
     brand: 'ZHAFIR',
     model: 'VE1900III-430H',
     serialNo: '202115019025851',
@@ -177,8 +177,8 @@ export const machineSeeds = [
     floorPosition: 5,
   },
   {
-    machineId: 9,
-    machineName: 'IM09',
+    id: 9,
+    name: 'IM09',
     brand: 'ZHAFIR',
     model: 'VE2300III-640H',
     serialNo: '202115023034516',
@@ -193,8 +193,8 @@ export const machineSeeds = [
   // ==================== BOTTOM ROW (near walkway) ====================
   // Layout: IM08, IM07, IM14, IM13
   {
-    machineId: 8,
-    machineName: 'IM08',
+    id: 8,
+    name: 'IM08',
     brand: 'HAITIAN',
     model: 'MA600IIS',
     serialNo: '201907006053611',
@@ -206,8 +206,8 @@ export const machineSeeds = [
     floorPosition: 1,
   },
   {
-    machineId: 7,
-    machineName: 'IM07',
+    id: 7,
+    name: 'IM07',
     brand: 'HAITIAN',
     model: 'MA600IIS',
     serialNo: '201907006053610',
@@ -219,8 +219,8 @@ export const machineSeeds = [
     floorPosition: 2,
   },
   {
-    machineId: 14,
-    machineName: 'IM14',
+    id: 14,
+    name: 'IM14',
     brand: 'ZHAFIR',
     model: 'VE600III-80H',
     serialNo: '202215006016027',
@@ -232,8 +232,8 @@ export const machineSeeds = [
     floorPosition: 3,
   },
   {
-    machineId: 13,
-    machineName: 'IM13',
+    id: 13,
+    name: 'IM13',
     brand: 'ZHAFIR',
     model: 'VE600III-80H',
     serialNo: '202215006025067',
