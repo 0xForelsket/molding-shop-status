@@ -128,7 +128,7 @@ app.get('/api/events', async (c) => {
 
 const port = Number.parseInt(process.env.API_PORT || '3000');
 
-console.log(`🚀 API server starting on port ${port}`);
+console.log(`Server is running on port ${port} (Started at ${new Date().toLocaleTimeString()})`);
 
 export default {
   port,
