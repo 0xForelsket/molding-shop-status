@@ -50,12 +50,19 @@ interface Order {
 interface ProductionLog {
   productionLog: {
     id: number;
-    shiftId: number;
-    shiftDate: string;
+    shiftInstanceId: number;
     quantityProduced: number;
     quantityScrap: number;
     status: string;
     notes: string | null;
+    createdAt: string;
+  };
+  shiftInstance: {
+    id: number;
+    productionDate: string;
+  };
+  shift: {
+    name: string;
   };
 }
 
@@ -313,30 +320,30 @@ export function ShiftProductionPage() {
     if (!selectedMachineId || !recentLogs.length) return null;
 
     // Find logs from previous shift
-    const validLogs = recentLogs.filter((l) => l.productionLog);
+    const validLogs = recentLogs.filter((l) => l.productionLog && l.shiftInstance);
     const sorted = [...validLogs].sort(
       (a, b) =>
-        new Date(b.productionLog.shiftDate).getTime() -
-        new Date(a.productionLog.shiftDate).getTime()
+        new Date(b.shiftInstance.productionDate).getTime() -
+        new Date(a.shiftInstance.productionDate).getTime()
     );
 
-    // Get earliest distinct shift
-    const currentKey = `${selectedDate.toISOString().split('T')[0]}-${selectedShiftId}`;
+    // Get earliest distinct shift instance
+    const currentKey = `${selectedDate.toISOString().split('T')[0]}-${selectedShiftInstanceId}`;
     const previousLogs = sorted.filter((log) => {
-      const logKey = `${log.productionLog.shiftDate.split('T')[0]}-${log.productionLog.shiftId}`;
+      const logKey = `${log.shiftInstance.productionDate}-${log.productionLog.shiftInstanceId}`;
       return logKey !== currentKey;
     });
 
     if (!previousLogs.length) return null;
 
     const firstPrevious = previousLogs[0];
-    const prevShiftId = firstPrevious.productionLog.shiftId;
-    const prevDate = firstPrevious.productionLog.shiftDate.split('T')[0];
+    const prevShiftInstanceId = firstPrevious.productionLog.shiftInstanceId;
+    const prevDate = firstPrevious.shiftInstance.productionDate;
 
     const allPreviousShiftLogs = previousLogs.filter(
       (log) =>
-        log.productionLog.shiftId === prevShiftId &&
-        log.productionLog.shiftDate.startsWith(prevDate)
+        log.productionLog.shiftInstanceId === prevShiftInstanceId &&
+        log.shiftInstance.productionDate === prevDate
     );
 
     const totalProduced = allPreviousShiftLogs.reduce(
@@ -347,17 +354,16 @@ export function ShiftProductionPage() {
       (sum, l) => sum + (l.productionLog.quantityScrap || 0),
       0
     );
-    const prevShift = shifts.find((s) => s.id === prevShiftId);
 
     return {
-      shiftName: prevShift?.name || 'Previous Shift',
+      shiftName: firstPrevious.shift?.name || 'Previous Shift',
       date: prevDate,
       totalProduced,
       totalScrap,
       scrapRate:
         totalProduced > 0 ? ((totalScrap / (totalProduced + totalScrap)) * 100).toFixed(1) : '0',
     };
-  }, [selectedMachineId, recentLogs, selectedDate, selectedShiftId, shifts]);
+  }, [selectedMachineId, recentLogs, selectedDate, selectedShiftInstanceId]);
 
   // Running totals calculation
   const runningTotals = useMemo(() => {
@@ -511,12 +517,18 @@ export function ShiftProductionPage() {
           <ShiftTimeline
             shifts={shifts}
             logs={recentLogs
-              .filter((l) => l.productionLog)
-              .map((l) => ({
-                shiftId: l.productionLog.shiftId,
-                shiftDate: l.productionLog.shiftDate,
-                quantityProduced: l.productionLog.quantityProduced,
-              }))}
+              .filter((l) => l.productionLog && l.shiftInstance)
+              .map((l) => {
+                // Find the shiftId from the shiftInstance's shiftTemplateId (need to look it up)
+                const matchingInstance = shiftInstances.find(
+                  (si) => si.id === l.productionLog.shiftInstanceId
+                );
+                return {
+                  shiftId: matchingInstance?.shiftTemplateId ?? 0,
+                  shiftDate: l.shiftInstance.productionDate,
+                  quantityProduced: l.productionLog.quantityProduced,
+                };
+              })}
             selectedDate={selectedDate}
             selectedShiftId={selectedShiftId}
             onSelect={(date, shiftId) => {
