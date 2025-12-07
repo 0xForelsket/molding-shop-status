@@ -1,7 +1,7 @@
 // Seed data for all 18 injection molding machines
 // Run with: bun run db:seed
 
-export const machineSeeds = [
+export const workCenterSeeds = [
   // ==================== TOP ROW (near main conveyor) ====================
   // Layout: IM12, IM11, IM06, IM05, IM04, IM03, IM02, IM01
   {
