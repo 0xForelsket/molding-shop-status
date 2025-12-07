@@ -1,6 +1,3 @@
-// packages/web/src/components/AppLayout.tsx
-// Shared layout with sidebar navigation for all pages
-
 import {
   ClipboardList,
   Cog,
@@ -13,49 +10,51 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 
-export type Page = 'dashboard' | 'parts' | 'orders' | 'machines' | 'production' | 'masterdata';
-
 interface NavItem {
-  id: Page;
+  path: string;
   label: string;
   icon: React.ReactNode;
   roles?: ('admin' | 'planner' | 'line_leader' | 'viewer')[];
 }
 
 interface AppLayoutProps {
-  currentPage: Page;
-  onNavigate: (page: Page) => void;
   children: React.ReactNode;
 }
 
-export function AppLayout({ currentPage, onNavigate, children }: AppLayoutProps) {
+export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user, logout, hasRole } = useAuth();
 
   const navItems: NavItem[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutGrid className="w-5 h-5" /> },
+    { path: '/', label: 'Dashboard', icon: <LayoutGrid className="w-5 h-5" /> },
     {
-      id: 'production',
+      path: '/production',
       label: 'Log Production',
       icon: <FileText className="w-5 h-5" />,
     },
     {
-      id: 'orders',
+      path: '/orders',
       label: 'Production Orders',
       icon: <ClipboardList className="w-5 h-5" />,
       roles: ['admin', 'planner'],
     },
     {
-      id: 'parts',
+      path: '/parts',
       label: 'Parts Catalog',
       icon: <Package className="w-5 h-5" />,
       roles: ['admin', 'planner'],
     },
-    { id: 'machines', label: 'Machine Admin', icon: <Cog className="w-5 h-5" />, roles: ['admin'] },
     {
-      id: 'masterdata',
+      path: '/machines',
+      label: 'Machine Admin',
+      icon: <Cog className="w-5 h-5" />,
+      roles: ['admin'],
+    },
+    {
+      path: '/master-data',
       label: 'Master Data',
       icon: <Database className="w-5 h-5" />,
       roles: ['admin', 'line_leader'],
@@ -91,19 +90,20 @@ export function AppLayout({ currentPage, onNavigate, children }: AppLayoutProps)
         {/* Nav Items */}
         <nav className="flex-1 p-2 space-y-1">
           {visibleNavItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded text-left transition-colors ${
-                currentPage === item.id
-                  ? 'bg-emerald-50 text-emerald-700 font-medium'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                `w-full flex items-center gap-3 px-3 py-2 rounded text-left transition-colors ${
+                  isActive
+                    ? 'bg-emerald-50 text-emerald-700 font-medium'
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`
+              }
             >
               {item.icon}
               {sidebarOpen && <span>{item.label}</span>}
-            </button>
+            </NavLink>
           ))}
         </nav>
 

@@ -1,8 +1,8 @@
 // packages/web/src/App.tsx
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
-import { AppLayout, type Page } from './components/AppLayout';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { AppLayout } from './components/AppLayout';
 import { Dashboard } from './components/Dashboard';
 import { MachinesPage } from './components/MachinesPage';
 import { MasterDataPage } from './components/MasterDataPage';
@@ -22,22 +22,74 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
-  const [page, setPage] = useState<Page>('dashboard');
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ProtectedRoute>
-          <AppLayout currentPage={page} onNavigate={setPage}>
-            {page === 'dashboard' && <Dashboard />}
-            {page === 'production' && <ShiftProductionPage />}
-            {page === 'parts' && <PartsPage />}
-            {page === 'orders' && <OrdersPage />}
-            {page === 'machines' && <MachinesPage />}
-            {page === 'masterdata' && <MasterDataPage />}
-          </AppLayout>
-        </ProtectedRoute>
-      </AuthProvider>
-    </QueryClientProvider>
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <Dashboard />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/production"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <ShiftProductionPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parts"
+              element={
+                <ProtectedRoute roles={['admin', 'planner']}>
+                  <AppLayout>
+                    <PartsPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/orders"
+              element={
+                <ProtectedRoute roles={['admin', 'planner']}>
+                  <AppLayout>
+                    <OrdersPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/machines"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <AppLayout>
+                    <MachinesPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/master-data"
+              element={
+                <ProtectedRoute roles={['admin', 'line_leader']}>
+                  <AppLayout>
+                    <MasterDataPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </AuthProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
   );
 }
