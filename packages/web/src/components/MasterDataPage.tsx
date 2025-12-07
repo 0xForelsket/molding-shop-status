@@ -1,14 +1,31 @@
-import { AlertCircle, Calendar, CalendarDays, Clock, Cog, Database, Layers } from 'lucide-react';
+import {
+  AlertCircle,
+  Calendar,
+  CalendarDays,
+  Clock,
+  Cog,
+  Database,
+  Layers,
+  Users,
+} from 'lucide-react';
 import { useState } from 'react';
 import { DowntimeReasonsTab } from './master-data/DowntimeReasonsTab';
 import { MachinesTab } from './master-data/MachinesTab';
 import { PlantCalendarTab } from './master-data/PlantCalendarTab';
 import { ProductLinesTab } from './master-data/ProductLinesTab';
+import { ProductionSupervisorsTab } from './master-data/ProductionSupervisorsTab';
 import { ShiftScheduleTab } from './master-data/ShiftScheduleTab';
 import { ShiftsTab } from './master-data/ShiftsTab';
 import { TabButton } from './ui/tab-button';
 
-type Tab = 'shifts' | 'downtime' | 'productlines' | 'machines' | 'plantcalendar' | 'shiftschedule';
+type Tab =
+  | 'shifts'
+  | 'downtime'
+  | 'productlines'
+  | 'machines'
+  | 'plantcalendar'
+  | 'shiftschedule'
+  | 'supervisors';
 
 export function MasterDataPage() {
   const [activeTab, setActiveTab] = useState<Tab>('shifts');
@@ -68,6 +85,12 @@ export function MasterDataPage() {
               icon={<Cog className="w-4 h-4" />}
               label="Machines"
             />
+            <TabButton
+              active={activeTab === 'supervisors'}
+              onClick={() => setActiveTab('supervisors')}
+              icon={<Users className="w-4 h-4" />}
+              label="Supervisors"
+            />
           </div>
 
           {/* Tab Content */}
@@ -78,6 +101,7 @@ export function MasterDataPage() {
             {activeTab === 'downtime' && <DowntimeReasonsTab />}
             {activeTab === 'productlines' && <ProductLinesTab />}
             {activeTab === 'machines' && <MachinesTab />}
+            {activeTab === 'supervisors' && <ProductionSupervisorsTab />}
           </div>
         </div>
       </div>
