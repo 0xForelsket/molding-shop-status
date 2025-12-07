@@ -1,24 +1,21 @@
 // packages/web/src/components/dashboard/DashboardMachineCard.tsx
 import { AlertTriangle, Clock, Power, Settings } from 'lucide-react';
+import type { WorkCenter } from '../../lib/api';
 import { ProgressRing } from '../ui/ProgressRing';
 
-interface Machine {
-  machineId: number;
-  machineName: string;
-  status: 'running' | 'idle' | 'fault' | 'offline';
-  productionOrder: string | null;
-  partName?: string | null;
-  partNumber?: string | null;
-  imageUrl?: string | null;
-  quantityCompleted: number | null;
-  quantityRequired: number | null;
-  cycleTime?: number | null;
-  targetCycleTime?: number | null;
-  efficiency?: number | null;
+function calculateOEE(machine: WorkCenter): number {
+  if (machine.status === 'offline' || machine.status === 'fault') return 0;
+  if (machine.status === 'idle') return 25;
+
+  if (machine.currentOrder?.cycleTime) {
+    // Mock calculation since we don't have actual cycle time in WorkCenter yet
+    return 85;
+  }
+  return 85;
 }
 
 interface DashboardMachineCardProps {
-  machine: Machine;
+  machine: WorkCenter;
   onClick?: () => void;
 }
 
@@ -60,10 +57,11 @@ const statusConfig = {
 export function DashboardMachineCard({ machine, onClick }: DashboardMachineCardProps) {
   const config = statusConfig[machine.status];
   const StatusIcon = config.icon;
+  const efficiency = calculateOEE(machine);
 
   const progress =
-    machine.quantityRequired && machine.quantityCompleted
-      ? (machine.quantityCompleted / machine.quantityRequired) * 100
+    machine.currentOrder?.quantityRequired && machine.currentOrder?.quantityCompleted
+      ? (machine.currentOrder.quantityCompleted / machine.currentOrder.quantityRequired) * 100
       : 0;
 
   return (
@@ -75,11 +73,11 @@ export function DashboardMachineCard({ machine, onClick }: DashboardMachineCardP
       }`}
     >
       {/* Background Image (Optional) */}
-      {machine.imageUrl && (
+      {machine.currentOrder?.imageUrl && (
         <div className="absolute inset-0 z-0 opacity-10 group-hover:opacity-20 transition-opacity">
           <img
-            src={machine.imageUrl}
-            alt={machine.partName || 'Part'}
+            src={machine.currentOrder.imageUrl}
+            alt={machine.currentOrder.itemName || 'Part'}
             className="w-full h-full object-cover"
           />
         </div>
@@ -95,7 +93,7 @@ export function DashboardMachineCard({ machine, onClick }: DashboardMachineCardP
         <div className="flex justify-between items-start mb-4">
           <div>
             <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
-              {machine.machineName}
+              {machine.name}
             </h3>
             <div
               className={`flex items-center gap-1.5 mt-1 text-xs font-bold uppercase tracking-wider ${config.text}`}
@@ -106,7 +104,7 @@ export function DashboardMachineCard({ machine, onClick }: DashboardMachineCardP
           </div>
 
           {/* Progress Ring */}
-          {machine.productionOrder && (
+          {machine.currentOrder?.orderNumber && (
             <div className="flex-shrink-0">
               <ProgressRing
                 progress={progress}
@@ -120,19 +118,19 @@ export function DashboardMachineCard({ machine, onClick }: DashboardMachineCardP
         </div>
 
         {/* Order Info */}
-        {machine.productionOrder ? (
+        {machine.currentOrder?.orderNumber ? (
           <div className="mb-4">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">
               Active Part
             </div>
             <div className="font-bold text-slate-900 text-lg truncate leading-tight">
-              {machine.partNumber}
+              {machine.currentOrder.itemNumber}
             </div>
             <div className="text-sm text-slate-600 truncate font-medium mb-1.5">
-              {machine.partName || 'Unknown Part'}
+              {machine.currentOrder.itemName || 'Unknown Part'}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100 w-fit">
-              <span className="font-semibold">WO:</span> {machine.productionOrder}
+              <span className="font-semibold">WO:</span> {machine.currentOrder.orderNumber}
             </div>
           </div>
         ) : (
@@ -146,10 +144,10 @@ export function DashboardMachineCard({ machine, onClick }: DashboardMachineCardP
           <div>
             <div className="text-[10px] font-bold text-slate-400 uppercase">Cycle Time</div>
             <div className="text-sm font-bold text-slate-700">
-              {machine.cycleTime ? `${machine.cycleTime}s` : '--'}
-              {machine.targetCycleTime && (
+              {machine.currentOrder?.cycleTime ? `${machine.currentOrder.cycleTime}s` : '--'}
+              {machine.currentOrder?.cycleTime && (
                 <span className="text-xs text-slate-400 font-normal ml-1">
-                  / {machine.targetCycleTime}s
+                  / {machine.currentOrder.cycleTime}s
                 </span>
               )}
             </div>
@@ -158,14 +156,14 @@ export function DashboardMachineCard({ machine, onClick }: DashboardMachineCardP
             <div className="text-[10px] font-bold text-slate-400 uppercase">Efficiency</div>
             <div
               className={`text-sm font-bold ${
-                (machine.efficiency || 0) >= 90
+                efficiency >= 90
                   ? 'text-emerald-600'
-                  : (machine.efficiency || 0) >= 75
+                  : efficiency >= 75
                     ? 'text-amber-600'
                     : 'text-red-600'
               }`}
             >
-              {machine.efficiency ? `${machine.efficiency}%` : '--'}
+              {efficiency}%
             </div>
           </div>
         </div>

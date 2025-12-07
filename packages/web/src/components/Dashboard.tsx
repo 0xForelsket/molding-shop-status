@@ -3,8 +3,8 @@
 
 import { LayoutGrid, Map as MapIcon, Table } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useMachines, useSummary } from '../hooks/useMachines';
-import type { Machine } from '../lib/api';
+import { useSummary, useWorkCenters } from '../hooks/useWorkCenters';
+import type { WorkCenter } from '../lib/api';
 import { EditableTable } from './EditableTable';
 import { FloorLayoutDashboard } from './FloorLayoutDashboard';
 import { MachineDetailDialog } from './MachineDetailDialog';
@@ -54,10 +54,10 @@ function formatTimeRemaining(ms: number): string {
   return `${hours}h ${minutes}m remaining`;
 }
 
-function calculateMachineOEE(machine: Machine): number {
+function calculateMachineOEE(machine: WorkCenter): number {
   if (machine.status === 'offline' || machine.status === 'fault') return 0;
   if (machine.status === 'idle') return 25;
-  if (machine.targetCycleTime) {
+  if (machine.currentOrder?.cycleTime) {
     return Math.round(0.95 * 1 * 0.99 * 100); // Simplified OEE calculation
   }
   return 85;
@@ -66,9 +66,9 @@ function calculateMachineOEE(machine: Machine): number {
 export function Dashboard() {
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'floor'>('grid');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState<WorkCenter | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { data: machines = [], isLoading, error, refetch } = useMachines();
+  const { data: workCenters = [], isLoading, error, refetch } = useWorkCenters();
   const { data: summary } = useSummary();
 
   // Live clock update
@@ -82,16 +82,16 @@ export function Dashboard() {
   const shift = getCurrentShift();
 
   // Filter machines based on status
-  const filteredMachines =
-    statusFilter === 'all' ? machines : machines.filter((m) => m.status === statusFilter);
+  const filteredWorkCenters =
+    statusFilter === 'all' ? workCenters : workCenters.filter((m) => m.status === statusFilter);
 
   // Calculate overall OEE (average of running machines)
-  const runningMachines = machines.filter((m) => m.status === 'running');
+  const runningWorkCenters = workCenters.filter((m) => m.status === 'running');
   const averageOEE =
-    runningMachines.length > 0
+    runningWorkCenters.length > 0
       ? Math.round(
-          runningMachines.reduce((sum, m) => sum + calculateMachineOEE(m), 0) /
-            runningMachines.length
+          runningWorkCenters.reduce((sum, m) => sum + calculateMachineOEE(m), 0) /
+            runningWorkCenters.length
         )
       : 0;
 
@@ -319,9 +319,9 @@ export function Dashboard() {
               <div className="mb-6 flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-500">
                   Showing{' '}
-                  <span className="font-bold text-slate-800">{filteredMachines.length}</span>{' '}
-                  {statusFilter} machine
-                  {filteredMachines.length !== 1 ? 's' : ''}
+                  <span className="font-bold text-slate-800">{filteredWorkCenters.length}</span>{' '}
+                  {statusFilter} work center
+                  {filteredWorkCenters.length !== 1 ? 's' : ''}
                 </span>
                 <button
                   type="button"
@@ -333,9 +333,9 @@ export function Dashboard() {
               </div>
             )}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-6">
-              {filteredMachines.map((machine) => (
+              {filteredWorkCenters.map((machine) => (
                 <DashboardMachineCard
-                  key={machine.machineId}
+                  key={machine.id}
                   machine={machine}
                   onClick={() => setSelectedMachine(machine)}
                 />
@@ -346,14 +346,14 @@ export function Dashboard() {
           <FloorLayoutDashboard />
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <EditableTable machines={machines} onRefresh={refetch} />
+            <EditableTable machines={workCenters} onRefresh={refetch} />
           </div>
         )}
       </div>
 
       {/* Footer */}
       <footer className="h-10 bg-white border-t border-slate-200 flex items-center justify-center text-xs font-medium text-slate-400">
-        {machines.length} machines connected • Auto-refresh every 2s
+        {workCenters.length} work centers connected • Auto-refresh every 2s
       </footer>
 
       <MachineDetailDialog

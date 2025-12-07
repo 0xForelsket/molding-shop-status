@@ -3,29 +3,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { type WorkCenter, fetchWorkCenters } from '../lib/api';
 import { cn } from '../lib/utils';
-
-interface Machine {
-  machineId: number;
-  machineName: string;
-  status: string;
-  brand: string | null;
-  model: string | null;
-  tonnage: number | null;
-  is2K: boolean | null;
-  floorRow: string | null;
-  floorPosition: number | null;
-  productionOrder: string | null;
-  partNumber: string | null;
-  partName: string | null;
-  cycleCount: number | null;
-}
-
-async function fetchMachines(): Promise<Machine[]> {
-  const res = await fetch('/api/machines');
-  if (!res.ok) throw new Error('Failed to fetch machines');
-  return res.json();
-}
 
 // Status colors - Industrial Precision palette
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -35,7 +14,7 @@ const statusColors: Record<string, { bg: string; border: string; text: string }>
   offline: { bg: 'bg-slate-100', border: 'border-slate-400', text: 'text-slate-500' },
 };
 
-function FloorMachineCard({ machine }: { machine: Machine }) {
+function FloorMachineCard({ machine }: { machine: WorkCenter }) {
   const colors = statusColors[machine.status] || statusColors.offline;
 
   return (
@@ -54,7 +33,7 @@ function FloorMachineCard({ machine }: { machine: Machine }) {
       )}
 
       {/* Machine Name */}
-      <div className="text-base font-bold text-slate-900">{machine.machineName}</div>
+      <div className="text-base font-bold text-slate-900">{machine.name}</div>
 
       {/* Tonnage */}
       <div className="text-xs text-slate-500">{machine.tonnage}T</div>
@@ -65,8 +44,10 @@ function FloorMachineCard({ machine }: { machine: Machine }) {
       </div>
 
       {/* Order info */}
-      {machine.productionOrder && (
-        <div className="text-[10px] text-slate-400 truncate mt-1">#{machine.productionOrder}</div>
+      {machine.currentOrder && (
+        <div className="text-[10px] text-slate-400 truncate mt-1">
+          #{machine.currentOrder.orderNumber}
+        </div>
       )}
     </div>
   );
@@ -91,8 +72,8 @@ function ConveyorLine({ label }: { label?: string }) {
 
 export function FloorLayoutDashboard() {
   const { data: machines = [], isLoading } = useQuery({
-    queryKey: ['machines'],
-    queryFn: fetchMachines,
+    queryKey: ['work-centers'],
+    queryFn: fetchWorkCenters,
     refetchInterval: 5000,
   });
 
@@ -127,7 +108,7 @@ export function FloorLayoutDashboard() {
       </div>
       <div className="flex gap-3 flex-wrap justify-start bg-white border border-slate-200 p-4 rounded">
         {topRow.map((machine) => (
-          <FloorMachineCard key={machine.machineId} machine={machine} />
+          <FloorMachineCard key={machine.id} machine={machine} />
         ))}
       </div>
 
@@ -140,7 +121,7 @@ export function FloorLayoutDashboard() {
       </div>
       <div className="flex gap-3 flex-wrap justify-start bg-white border border-slate-200 p-4 rounded">
         {middleRow.map((machine) => (
-          <FloorMachineCard key={machine.machineId} machine={machine} />
+          <FloorMachineCard key={machine.id} machine={machine} />
         ))}
       </div>
 
@@ -153,7 +134,7 @@ export function FloorLayoutDashboard() {
       </div>
       <div className="flex gap-3 flex-wrap justify-start bg-white border border-slate-200 p-4 rounded">
         {bottomRow.map((machine) => (
-          <FloorMachineCard key={machine.machineId} machine={machine} />
+          <FloorMachineCard key={machine.id} machine={machine} />
         ))}
       </div>
 
