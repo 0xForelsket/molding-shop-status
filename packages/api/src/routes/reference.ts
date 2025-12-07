@@ -339,3 +339,87 @@ referenceRoutes.get('/production-supervisors', async (c) => {
     .orderBy(productionSupervisors.code);
   return c.json(supervisors);
 });
+
+const productionSupervisorSchema = z.object({
+  code: z.string().min(1).max(10),
+  name: z.string().min(1),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
+referenceRoutes.post(
+  '/production-supervisors',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', productionSupervisorSchema),
+  async (c) => {
+    const data = c.req.valid('json');
+
+    // Check if code already exists
+    const existing = await db
+      .select()
+      .from(productionSupervisors)
+      .where(eq(productionSupervisors.code, data.code))
+      .limit(1);
+    if (existing.length > 0) {
+      return c.json({ error: 'Production supervisor with this code already exists' }, 409);
+    }
+
+    await db.insert(productionSupervisors).values(data);
+    return c.json({ success: true, code: data.code }, 201);
+  }
+);
+
+referenceRoutes.patch(
+  '/production-supervisors/:code',
+  jwtAuth,
+  requireRole('admin'),
+  zValidator('json', productionSupervisorSchema.partial().omit({ code: true })),
+  async (c) => {
+    const code = c.req.param('code');
+    const updates = c.req.valid('json');
+
+    const existing = await db
+      .select()
+      .from(productionSupervisors)
+      .where(eq(productionSupervisors.code, code))
+      .limit(1);
+    if (existing.length === 0) {
+      return c.json({ error: 'Production supervisor not found' }, 404);
+    }
+
+    await db.update(productionSupervisors).set(updates).where(eq(productionSupervisors.code, code));
+    return c.json({ success: true });
+  }
+);
+
+referenceRoutes.delete(
+  '/production-supervisors/:code',
+  jwtAuth,
+  requireRole('admin'),
+  async (c) => {
+    const code = c.req.param('code');
+
+    const existing = await db
+      .select()
+      .from(productionSupervisors)
+      .where(eq(productionSupervisors.code, code))
+      .limit(1);
+    if (existing.length === 0) {
+      return c.json({ error: 'Production supervisor not found' }, 404);
+    }
+
+    // Check if any items reference this supervisor
+    const usedByItems = await db
+      .select()
+      .from(items)
+      .where(eq(items.supervisorCode, code))
+      .limit(1);
+    if (usedByItems.length > 0) {
+      return c.json({ error: 'Cannot delete supervisor that is referenced by items' }, 409);
+    }
+
+    await db.delete(productionSupervisors).where(eq(productionSupervisors.code, code));
+    return c.json({ success: true });
+  }
+);
