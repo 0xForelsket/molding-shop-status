@@ -58,6 +58,20 @@ export const productionSupervisors = pgTable('production_supervisors', {
   isActive: boolean('is_active').default(true),
 });
 
+// ============== MOLDS (Equipment / PRT) ==============
+
+export const molds = pgTable('molds', {
+  id: text('id').primaryKey(), // Equipment Number (e.g. MLD-001)
+  name: text('name').notNull(),
+  cavities: integer('cavities').default(1).notNull(),
+  runnerType: text('runner_type'), // 'hot', 'cold'
+  gateType: text('gate_type'),
+  status: text('status').default('active'), // 'active', 'maintenance', 'retired'
+  totalShots: integer('total_shots').default(0),
+  maintenanceInterval: integer('maintenance_interval'), // shots between maintenance
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // ============== ITEMS (formerly parts) ==============
 
 export const items = pgTable('items', {
@@ -110,12 +124,10 @@ export const routing = pgTable('routing', {
   itemNumber: text('item_number')
     .references(() => items.itemNumber)
     .notNull(),
+  moldId: text('mold_id').references(() => molds.id), // Link to PRT (Mold)
   cycleTime: real('cycle_time'), // seconds
-  outputQty: integer('output_qty').default(1), // parts per cycle (was cavity_plan)
-  moldId: text('mold_id'),
+  outputQty: integer('output_qty').default(1), // parts per cycle (defaults to mold cavities, can be overridden)
   setupTime: integer('setup_time'), // minutes
-  runnerType: text('runner_type'), // 'hot', 'cold'
-  gateType: text('gate_type'),
   notes: text('notes'),
 });
 
@@ -275,6 +287,9 @@ export type NewBom = typeof bom.$inferInsert;
 export type Routing = typeof routing.$inferSelect;
 export type NewRouting = typeof routing.$inferInsert;
 export type MachinePart = Routing; // Legacy alias
+
+export type Mold = typeof molds.$inferSelect;
+export type NewMold = typeof molds.$inferInsert;
 
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 export type Shift = typeof shifts.$inferSelect;
