@@ -6,6 +6,7 @@ import {
   downtimeReasons,
   items,
   productLines,
+  productionSupervisors,
   routing,
   shiftBreaks,
   shifts,
@@ -18,6 +19,7 @@ import { machinePartSeeds, partSeeds } from './parts';
 import {
   downtimeReasonSeeds,
   productLineSeeds,
+  productionSupervisorSeeds,
   shiftBreakSeeds,
   shiftSeeds,
   userSeeds,
@@ -86,6 +88,13 @@ async function seed() {
     await db.insert(workCenters).values(wc).onConflictDoNothing();
   }
   console.log(`    ✓ ${machineSeeds.length} work centers`);
+
+  // Seed production supervisors (must be before items due to FK)
+  console.log('  → Inserting production supervisors...');
+  for (const sup of productionSupervisorSeeds) {
+    await db.insert(productionSupervisors).values(sup).onConflictDoNothing();
+  }
+  console.log(`    ✓ ${productionSupervisorSeeds.length} production supervisors`);
 
   // Seed items (formerly parts)
   console.log('  → Inserting items...');

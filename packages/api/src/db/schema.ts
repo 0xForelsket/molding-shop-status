@@ -49,6 +49,15 @@ export const statusLogs = pgTable('status_logs', {
   timestamp: timestamp('timestamp').defaultNow(),
 });
 
+// ============== PRODUCTION SUPERVISORS ==============
+
+export const productionSupervisors = pgTable('production_supervisors', {
+  code: text('code').primaryKey(), // P01, P02, P03
+  name: text('name').notNull(), // Molding, Preassembly, Final Packaging
+  description: text('description'),
+  isActive: boolean('is_active').default(true),
+});
+
 // ============== ITEMS (formerly parts) ==============
 
 export const items = pgTable('items', {
@@ -57,6 +66,7 @@ export const items = pgTable('items', {
   materialType: text('material_type').notNull().default('HALB'), // 'ROH', 'HALB', 'FERT'
   uom: text('uom').default('PCS'), // Unit of measure: PCS, KG, G
   productLine: text('product_line'),
+  supervisorCode: text('supervisor_code').references(() => productionSupervisors.code), // P01, P02, P03
   imageUrl: text('image_url'),
 
   // Physical properties (for HALB/FERT)

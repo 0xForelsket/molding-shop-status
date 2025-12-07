@@ -10,6 +10,7 @@ import {
   downtimeReasons,
   items,
   productLines,
+  productionSupervisors,
   routing,
   scrapReasons,
   shiftBreaks,
@@ -327,4 +328,14 @@ referenceRoutes.get('/scrap-reasons', async (c) => {
     .from(scrapReasons)
     .orderBy(scrapReasons.category, scrapReasons.name);
   return c.json(reasons);
+});
+
+// ============== PRODUCTION SUPERVISORS ==============
+
+referenceRoutes.get('/production-supervisors', async (c) => {
+  const supervisors = await db
+    .select()
+    .from(productionSupervisors)
+    .orderBy(productionSupervisors.code);
+  return c.json(supervisors);
 });

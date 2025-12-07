@@ -61,3 +61,11 @@ export const userSeeds = [
   { username: 'leader2', role: 'line_leader', name: 'Line Leader 2', isActive: true },
   { username: 'viewer', role: 'viewer', name: 'Dashboard Viewer', isActive: true },
 ];
+
+// Production Supervisors - responsible for different production areas
+export const productionSupervisorSeeds = [
+  { code: 'P01', name: 'Molding', description: 'Injection Molding Area', isActive: true },
+  { code: 'P02', name: 'Preassembly', description: 'Preassembly Area', isActive: true },
+  { code: 'P03', name: 'Final Packaging', description: 'Final Packaging Area', isActive: true },
+  { code: 'P04', name: 'Tampo Printing', description: 'Tampo Printing Area', isActive: true },
+];
