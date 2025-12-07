@@ -3,19 +3,19 @@
 
 import { Pencil, Save, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
-import type { Machine } from '../lib/api';
+import type { WorkCenter } from '../lib/api';
 import { getAuthHeader, useAuth } from '../lib/auth';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 
 interface AvailableOrder {
   orderNumber: string;
-  partNumber: string;
+  itemNumber: string;
   partName: string | null;
 }
 
 interface PartWithOrders {
-  partNumber: string;
+  itemNumber: string;
   partName: string | null;
   lowestOrder: string;
   orderCount: number;
@@ -45,35 +45,35 @@ const MachineRow = memo(function MachineRow({
   availableData,
   isSaving,
 }: {
-  machine: Machine;
+  machine: WorkCenter;
   isEditing: boolean;
   onEdit: () => void;
   onSave: (data: {
     productionOrder: string | null;
-    status: Machine['status'];
-    inputMode: Machine['inputMode'];
+    status: WorkCenter['status'];
+    inputMode: WorkCenter['inputMode'];
   }) => void;
   onCancel: () => void;
   availableData: AvailableData | null;
   isSaving: boolean;
 }) {
-  const [selectedOrder, setSelectedOrder] = useState(machine.productionOrder ?? '');
-  const [status, setStatus] = useState<Machine['status']>(machine.status);
-  const [inputMode, setInputMode] = useState<Machine['inputMode']>(machine.inputMode);
+  const [selectedOrder, setSelectedOrder] = useState(machine.currentOrder?.orderNumber ?? '');
+  const [status, setStatus] = useState<WorkCenter['status']>(machine.status);
+  const [inputMode, setInputMode] = useState<WorkCenter['inputMode']>(machine.inputMode);
   const [selectMode, setSelectMode] = useState<'order' | 'part'>('order');
 
   useEffect(() => {
     if (isEditing) {
-      setSelectedOrder(machine.productionOrder ?? '');
+      setSelectedOrder(machine.currentOrder?.orderNumber ?? '');
       setStatus(machine.status);
       setInputMode(machine.inputMode);
       setSelectMode('order');
     }
-  }, [isEditing, machine.productionOrder, machine.status, machine.inputMode]);
+  }, [isEditing, machine.currentOrder?.orderNumber, machine.status, machine.inputMode]);
 
-  const handlePartSelect = (partNumber: string) => {
+  const handlePartSelect = (itemNumber: string) => {
     if (!availableData) return;
-    const partData = availableData.byPart.find((p) => p.partNumber === partNumber);
+    const partData = availableData.byPart.find((p) => p.itemNumber === itemNumber);
     if (partData) {
       setSelectedOrder(partData.lowestOrder);
     }
@@ -83,12 +83,12 @@ const MachineRow = memo(function MachineRow({
 
   return (
     <tr className={cn('border-b border-slate-100', isEditing ? 'bg-blue-50' : 'hover:bg-slate-50')}>
-      <td className="px-3 py-2.5 font-semibold text-slate-900">{machine.machineName}</td>
+      <td className="px-3 py-2.5 font-semibold text-slate-900">{machine.name}</td>
       <td className="px-3 py-2.5">
         {isEditing && inputMode === 'manual' ? (
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as Machine['status'])}
+            onChange={(e) => setStatus(e.target.value as WorkCenter['status'])}
             className="h-7 text-xs rounded border border-slate-300 bg-white px-1 text-slate-800 w-full"
           >
             <option value="running">Running</option>
@@ -141,48 +141,50 @@ const MachineRow = memo(function MachineRow({
               >
                 <option value="">Clear assignment</option>
                 {availableData?.orders
-                  .filter(
-                    (o) => !!availableData.compatibility[o.partNumber]?.includes(machine.machineId)
-                  )
+                  .filter((o) => !!availableData.compatibility[o.itemNumber]?.includes(machine.id))
                   .map((o) => (
                     <option key={o.orderNumber} value={o.orderNumber}>
-                      {o.orderNumber} → {o.partNumber}
+                      {o.orderNumber} → {o.itemNumber}
                     </option>
                   ))}
               </select>
             ) : (
               <select
-                value={selectedOrderData?.partNumber ?? ''}
+                value={selectedOrderData?.itemNumber ?? ''}
                 onChange={(e) => handlePartSelect(e.target.value)}
                 className="h-8 text-xs flex-1 rounded border border-slate-300 bg-white px-2 text-slate-800"
               >
                 <option value="">Select part...</option>
                 {availableData?.byPart
-                  .filter(
-                    (p) => !!availableData.compatibility[p.partNumber]?.includes(machine.machineId)
-                  )
+                  .filter((p) => !!availableData.compatibility[p.itemNumber]?.includes(machine.id))
                   .map((p) => (
-                    <option key={p.partNumber} value={p.partNumber}>
-                      {p.partNumber} - {p.partName} ({p.orderCount} orders)
+                    <option key={p.itemNumber} value={p.itemNumber}>
+                      {p.itemNumber} - {p.partName} ({p.orderCount} orders)
                     </option>
                   ))}
               </select>
             )}
 
             {selectedOrder && (
-              <span className="text-xs text-slate-500">→ {selectedOrderData?.partNumber}</span>
+              <span className="text-xs text-slate-500">→ {selectedOrderData?.itemNumber}</span>
             )}
           </div>
         ) : (
-          <span className="font-mono text-xs text-slate-700">{machine.productionOrder || '-'}</span>
+          <span className="font-mono text-xs text-slate-700">
+            {machine.currentOrder?.orderNumber || '-'}
+          </span>
         )}
       </td>
       {!isEditing && (
         <td className="px-3 py-2.5 text-slate-700">
-          <span className="truncate max-w-[200px] block">{machine.partNumber || '-'}</span>
+          <span className="truncate max-w-[200px] block">
+            {machine.currentOrder?.itemNumber || '-'}
+          </span>
         </td>
       )}
-      <td className="px-3 py-2.5 tabular-nums text-slate-700">{machine.targetCycleTime ?? '-'}</td>
+      <td className="px-3 py-2.5 tabular-nums text-slate-700">
+        {machine.currentOrder?.cycleTime ?? '-'}
+      </td>
       <td className="px-3 py-2.5 font-mono tabular-nums text-slate-700">
         {machine.cycleCount?.toLocaleString() ?? '0'}
       </td>
@@ -245,7 +247,7 @@ const MachineRow = memo(function MachineRow({
 export function EditableTable({
   machines,
   onRefresh,
-}: { machines: Machine[]; onRefresh: () => void }) {
+}: { machines: WorkCenter[]; onRefresh: () => void }) {
   const { user } = useAuth();
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [availableData, setAvailableData] = useState<AvailableData | null>(null);
@@ -263,18 +265,18 @@ export function EditableTable({
       machineId: number,
       data: {
         productionOrder: string | null;
-        status: Machine['status'];
-        inputMode: Machine['inputMode'];
+        status: WorkCenter['status'];
+        inputMode: WorkCenter['inputMode'];
       }
     ) => {
       setIsSaving(true);
       try {
-        const machine = machines.find((m) => m.machineId === machineId);
+        const machine = machines.find((m) => m.id === machineId);
         if (!machine) return;
 
         // 1. Update Input Mode if changed
         if (data.inputMode !== machine.inputMode) {
-          await fetch(`/api/machines/${machineId}/input-mode`, {
+          await fetch(`/api/work-centers/${machineId}/input-mode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
             body: JSON.stringify({ mode: data.inputMode }),
@@ -284,7 +286,7 @@ export function EditableTable({
         // 2. Update Status if changed (and in manual mode)
         // We check data.inputMode because we might have just switched it
         if (data.inputMode === 'manual' && data.status !== machine.status) {
-          await fetch(`/api/machines/${machineId}/manual-status`, {
+          await fetch(`/api/work-centers/${machineId}/manual-status`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
             body: JSON.stringify({
@@ -296,11 +298,11 @@ export function EditableTable({
 
         // 3. Update Order Configuration if changed
         // We always update config if order changed, regardless of mode (usually)
-        if (data.productionOrder !== machine.productionOrder) {
-          const res = await fetch(`/api/machines/${machineId}/config`, {
+        if (data.productionOrder !== machine.currentOrder?.orderNumber) {
+          const res = await fetch(`/api/work-centers/${machineId}/assign-order`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-            body: JSON.stringify({ productionOrder: data.productionOrder }),
+            body: JSON.stringify({ orderNumber: data.productionOrder }),
           });
           if (!res.ok) {
             const err = await res.json();
@@ -357,11 +359,11 @@ export function EditableTable({
         <tbody>
           {machines.map((machine) => (
             <MachineRow
-              key={machine.machineId}
+              key={machine.id}
               machine={machine}
-              isEditing={editingRow === machine.machineId}
-              onEdit={() => setEditingRow(machine.machineId)}
-              onSave={(data) => handleSave(machine.machineId, data)}
+              isEditing={editingRow === machine.id}
+              onEdit={() => setEditingRow(machine.id)}
+              onSave={(data) => handleSave(machine.id, data)}
               onCancel={() => setEditingRow(null)}
               availableData={availableData}
               isSaving={isSaving}

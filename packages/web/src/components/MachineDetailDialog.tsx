@@ -1,55 +1,52 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Clock, Play, Square } from 'lucide-react';
-import type { Machine } from '../lib/api';
+import type { WorkCenter } from '../lib/api';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Progress } from './ui/progress';
 
 interface MachineDetailDialogProps {
-  machine: Machine | null;
+  machine: WorkCenter | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 interface QueueOrder {
   orderNumber: string;
-  partNumber: string;
-  partName: string | null;
+  itemNumber: string;
+  itemName: string | null;
   quantityRequired: number;
   dueDate: string | null;
 }
 
 interface OrderResponse {
-  production_orders: {
+  order: {
     orderNumber: string;
-    partNumber: string;
-    machineId: number | null;
+    itemNumber: string;
+    workCenterId: number | null;
     status: string;
     quantityRequired: number;
     dueDate: string | null;
   };
-  parts: { partName: string } | null;
+  item: { name: string } | null;
 }
 
 // Fetch assigned orders for this machine
-async function fetchMachineQueue(machineId: number | undefined): Promise<QueueOrder[]> {
-  if (!machineId) return [];
+async function fetchMachineQueue(workCenterId: number | undefined): Promise<QueueOrder[]> {
+  if (!workCenterId) return [];
   const res = await fetch('/api/orders');
   if (!res.ok) throw new Error('Failed to fetch orders');
   const allOrders: OrderResponse[] = await res.json();
 
   // Filter for this machine and 'assigned' status
   return allOrders
-    .filter(
-      (o) =>
-        o.production_orders.machineId === machineId && o.production_orders.status === 'assigned'
-    )
+    .filter((o) => o.order.workCenterId === workCenterId && o.order.status === 'assigned')
     .map((o) => ({
-      orderNumber: o.production_orders.orderNumber,
-      partNumber: o.production_orders.partNumber,
-      partName: o.parts?.partName ?? null,
-      quantityRequired: o.production_orders.quantityRequired,
-      dueDate: o.production_orders.dueDate,
+      orderNumber: o.order.orderNumber,
+      partNumber: o.order.itemNumber,
+      partName: o.item?.name ?? null,
+      quantityRequired: o.order.quantityRequired,
+      dueDate: o.order.dueDate,
     }));
 }
 
@@ -57,8 +54,8 @@ export function MachineDetailDialog({ machine, isOpen, onClose }: MachineDetailD
   const queryClient = useQueryClient();
 
   const { data: queue = [], isLoading: isLoadingQueue } = useQuery({
-    queryKey: ['machine-queue', machine?.machineId],
-    queryFn: () => fetchMachineQueue(machine?.machineId),
+    queryKey: ['machine-queue', machine?.id],
+    queryFn: () => fetchMachineQueue(machine?.id),
     enabled: !!machine,
   });
 
@@ -80,13 +77,13 @@ export function MachineDetailDialog({ machine, isOpen, onClose }: MachineDetailD
 
   if (!machine) return null;
 
-  const activeOrder = machine.productionOrder
+  const activeOrder = machine.currentOrder
     ? {
-        orderNumber: machine.productionOrder,
-        partNumber: machine.partNumber,
-        partName: machine.partName,
-        quantityRequired: machine.quantityRequired,
-        quantityCompleted: machine.quantityCompleted,
+        orderNumber: machine.currentOrder.orderNumber,
+        partNumber: machine.currentOrder.itemNumber,
+        partName: machine.currentOrder.itemName,
+        quantityRequired: machine.currentOrder.quantityRequired,
+        quantityCompleted: machine.currentOrder.quantityCompleted,
       }
     : null;
 
@@ -101,7 +98,7 @@ export function MachineDetailDialog({ machine, isOpen, onClose }: MachineDetailD
           <div className="flex items-center justify-between pr-8">
             <div className="flex items-center gap-3">
               <DialogTitle className="text-2xl font-bold text-slate-900">
-                {machine.machineName}
+                {machine.name}
               </DialogTitle>
               <span
                 className={`px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wider ${

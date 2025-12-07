@@ -1,23 +1,23 @@
 // packages/web/src/components/MachineCard.tsx
 // Industrial Precision Style - Light mode machine status card
 
-import type { Machine } from '../lib/api';
+import type { WorkCenter } from '../lib/api';
 
-function formatCycleTime(machine: Machine): string {
-  if (machine.targetCycleTime) {
-    return machine.targetCycleTime.toFixed(1);
+function formatCycleTime(machine: WorkCenter): string {
+  if (machine.currentOrder?.cycleTime) {
+    return machine.currentOrder.cycleTime.toFixed(1);
   }
   return '--';
 }
 
-function calculateOEE(machine: Machine): number {
+function calculateOEE(machine: WorkCenter): number {
   if (machine.status === 'offline' || machine.status === 'fault') return 0;
   if (machine.status === 'idle') return 25;
 
-  if (machine.targetCycleTime) {
-    const actualCycleTime = machine.targetCycleTime;
+  if (machine.currentOrder?.cycleTime) {
+    const actualCycleTime = machine.currentOrder.cycleTime;
     if (!Number.isNaN(actualCycleTime)) {
-      const performance = Math.min(machine.targetCycleTime / actualCycleTime, 1);
+      const performance = Math.min(machine.currentOrder.cycleTime / actualCycleTime, 1);
       return Math.round(0.95 * performance * 0.99 * 100);
     }
   }
@@ -52,7 +52,7 @@ function formatDowntimeDuration(lastSeen: string | null, status: string): string
   return `${days}d ${hours % 24}h`;
 }
 
-export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: () => void }) {
+export function MachineCard({ machine, onClick }: { machine: WorkCenter; onClick?: () => void }) {
   const oee = calculateOEE(machine);
   const cycleTime = formatCycleTime(machine);
 
@@ -82,7 +82,7 @@ export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: 
       <div className="p-4 pb-2">
         <div className="flex justify-between items-start mb-2">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900">{machine.machineName}</h2>
+            <h2 className="text-xl font-bold text-slate-900">{machine.name}</h2>
             <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 rounded-full uppercase">
               {machine.brand} {machine.tonnage}T
             </span>
@@ -118,9 +118,11 @@ export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: 
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">
               Part
             </div>
-            <div className="font-semibold text-slate-900">{machine.partNumber || '-'}</div>
-            {machine.partName && (
-              <div className="text-sm text-slate-600 truncate">{machine.partName}</div>
+            <div className="font-semibold text-slate-900">
+              {machine.currentOrder?.itemNumber || '-'}
+            </div>
+            {machine.currentOrder?.itemName && (
+              <div className="text-sm text-slate-600 truncate">{machine.currentOrder.itemName}</div>
             )}
           </div>
 
@@ -130,8 +132,10 @@ export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: 
               Cycle Time
             </div>
             <div className="font-bold text-slate-900 text-lg leading-tight">{cycleTime}s</div>
-            {machine.targetCycleTime && (
-              <div className="text-xs text-slate-500">(Target {machine.targetCycleTime}s)</div>
+            {machine.currentOrder?.cycleTime && (
+              <div className="text-xs text-slate-500">
+                (Target {machine.currentOrder.cycleTime}s)
+              </div>
             )}
           </div>
 
@@ -150,34 +154,41 @@ export function MachineCard({ machine, onClick }: { machine: Machine; onClick?: 
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">
                   Order
                 </div>
-                {machine.productionOrder ? (
+                {machine.currentOrder?.orderNumber ? (
                   <>
-                    <div className="font-bold text-slate-900">{machine.productionOrder}</div>
+                    <div className="font-bold text-slate-900">
+                      {machine.currentOrder.orderNumber}
+                    </div>
                     <div className="text-sm font-medium text-slate-600">
                       <span className="text-slate-800">
-                        {machine.quantityCompleted?.toLocaleString() ?? 0}
+                        {machine.currentOrder.quantityCompleted?.toLocaleString() ?? 0}
                       </span>
                       <span className="text-slate-400 mx-1">/</span>
-                      <span>{machine.quantityRequired?.toLocaleString() ?? '-'}</span>
+                      <span>{machine.currentOrder.quantityRequired?.toLocaleString() ?? '-'}</span>
                     </div>
                   </>
                 ) : (
                   <span className="text-slate-400 italic">No Order</span>
                 )}
               </div>
-              {machine.productionOrder && machine.quantityRequired && (
+              {machine.currentOrder?.orderNumber && machine.currentOrder?.quantityRequired && (
                 <div className="text-xs font-bold text-slate-400">
-                  {Math.round(((machine.quantityCompleted ?? 0) / machine.quantityRequired) * 100)}%
+                  {Math.round(
+                    ((machine.currentOrder.quantityCompleted ?? 0) /
+                      machine.currentOrder.quantityRequired) *
+                      100
+                  )}
+                  %
                 </div>
               )}
             </div>
             {/* Progress Bar */}
-            {machine.productionOrder && machine.quantityRequired && (
+            {machine.currentOrder?.orderNumber && machine.currentOrder?.quantityRequired && (
               <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
                 <div
                   className="bg-blue-500 h-1.5 rounded-full"
                   style={{
-                    width: `${Math.min(((machine.quantityCompleted ?? 0) / machine.quantityRequired) * 100, 100)}%`,
+                    width: `${Math.min(((machine.currentOrder.quantityCompleted ?? 0) / machine.currentOrder.quantityRequired) * 100, 100)}%`,
                   }}
                 />
               </div>

@@ -4,62 +4,43 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { type WorkCenter, fetchWorkCenters } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Button } from './ui/button';
 
-interface Machine {
-  machineId: number;
-  machineName: string;
-  brand: string | null;
-  model: string | null;
-  serialNo: string | null;
-  tonnage: number | null;
-  screwDiameter: number | null;
-  injectionWeight: number | null;
-  is2K: boolean;
-  floorRow: 'top' | 'middle' | 'bottom' | null;
-  floorPosition: number | null;
-  inputMode: 'auto' | 'manual';
-}
+type WorkCenterFormData = Omit<
+  WorkCenter,
+  'id' | 'status' | 'green' | 'red' | 'cycleCount' | 'lastSeen' | 'currentOrder' | 'statusUpdatedBy'
+>;
 
-type MachineFormData = Omit<Machine, 'machineId'>;
-
-const emptyMachine: MachineFormData = {
-  machineName: '',
+const emptyWorkCenter: WorkCenterFormData = {
+  name: '',
   brand: '',
   model: '',
-  serialNo: '',
   tonnage: null,
-  screwDiameter: null,
-  injectionWeight: null,
   is2K: false,
   floorRow: null,
   floorPosition: null,
   inputMode: 'auto',
+  type: 'injection', // Default
 };
-
-async function fetchMachines(): Promise<Machine[]> {
-  const res = await fetch('/api/machines');
-  if (!res.ok) throw new Error('Failed to fetch');
-  return res.json();
-}
 
 export function MachinesPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
-  const [editingMachine, setEditingMachine] = useState<Machine | null>(null);
+  const [editingWorkCenter, setEditingWorkCenter] = useState<WorkCenter | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState<MachineFormData>(emptyMachine);
+  const [formData, setFormData] = useState<WorkCenterFormData>(emptyWorkCenter);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
   const { data: machines = [], isLoading } = useQuery({
-    queryKey: ['machines'],
-    queryFn: fetchMachines,
+    queryKey: ['work-centers'],
+    queryFn: fetchWorkCenters,
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: MachineFormData) => {
-      const res = await fetch('/api/machines', {
+    mutationFn: async (data: WorkCenterFormData) => {
+      const res = await fetch('/api/work-centers', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,15 +52,15 @@ export function MachinesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['machines'] });
+      queryClient.invalidateQueries({ queryKey: ['work-centers'] });
       setIsCreating(false);
-      setFormData(emptyMachine);
+      setFormData(emptyWorkCenter);
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<MachineFormData> }) => {
-      const res = await fetch(`/api/machines/${id}`, {
+    mutationFn: async ({ id, data }: { id: number; data: Partial<WorkCenterFormData> }) => {
+      const res = await fetch(`/api/work-centers/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -91,14 +72,14 @@ export function MachinesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['machines'] });
-      setEditingMachine(null);
+      queryClient.invalidateQueries({ queryKey: ['work-centers'] });
+      setEditingWorkCenter(null);
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/machines/${id}`, {
+      const res = await fetch(`/api/work-centers/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -106,64 +87,62 @@ export function MachinesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['machines'] });
+      queryClient.invalidateQueries({ queryKey: ['work-centers'] });
       setDeleteConfirm(null);
     },
   });
 
-  const handleEdit = (machine: Machine) => {
-    setEditingMachine(machine);
+  const handleEdit = (workCenter: WorkCenter) => {
+    setEditingWorkCenter(workCenter);
     setFormData({
-      machineName: machine.machineName,
-      brand: machine.brand || '',
-      model: machine.model || '',
-      serialNo: machine.serialNo || '',
-      tonnage: machine.tonnage,
-      screwDiameter: machine.screwDiameter,
-      injectionWeight: machine.injectionWeight,
-      is2K: machine.is2K,
-      floorRow: machine.floorRow,
-      floorPosition: machine.floorPosition,
-      inputMode: machine.inputMode,
+      name: workCenter.name,
+      brand: workCenter.brand || '',
+      model: workCenter.model || '',
+      tonnage: workCenter.tonnage,
+      is2K: workCenter.is2K || false,
+      floorRow: workCenter.floorRow,
+      floorPosition: workCenter.floorPosition,
+      inputMode: workCenter.inputMode,
+      type: workCenter.type,
     });
   };
 
   const handleSave = () => {
-    if (editingMachine) {
-      updateMutation.mutate({ id: editingMachine.machineId, data: formData });
+    if (editingWorkCenter) {
+      updateMutation.mutate({ id: editingWorkCenter.id, data: formData });
     } else {
       createMutation.mutate(formData);
     }
   };
 
   const handleCancel = () => {
-    setEditingMachine(null);
+    setEditingWorkCenter(null);
     setIsCreating(false);
-    setFormData(emptyMachine);
+    setFormData(emptyWorkCenter);
   };
 
   return (
     <>
       <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6">
-        <h1 className="text-lg font-semibold text-slate-800">Manage Machines</h1>
+        <h1 className="text-lg font-semibold text-slate-800">Manage Work Centers</h1>
         <Button
           onClick={() => {
             setIsCreating(true);
-            setFormData(emptyMachine);
+            setFormData(emptyWorkCenter);
           }}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add Machine
+          Add Work Center
         </Button>
       </header>
 
       <div className="flex-1 p-6 overflow-auto">
-        {(isCreating || editingMachine) && (
+        {(isCreating || editingWorkCenter) && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
             <div className="bg-white rounded shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-200">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-semibold text-slate-900">
-                  {editingMachine ? `Edit ${editingMachine.machineName}` : 'Add New Machine'}
+                  {editingWorkCenter ? `Edit ${editingWorkCenter.name}` : 'Add New Work Center'}
                 </h2>
                 <button
                   type="button"
@@ -176,11 +155,11 @@ export function MachinesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <label className="block">
-                  <span className="block text-sm text-slate-600 mb-1">Machine Name *</span>
+                  <span className="block text-sm text-slate-600 mb-1">Work Center Name *</span>
                   <input
                     type="text"
-                    value={formData.machineName}
-                    onChange={(e) => setFormData({ ...formData, machineName: e.target.value })}
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-blue-500 focus:outline-none"
                     placeholder="e.g. IM19"
                   />
@@ -209,17 +188,6 @@ export function MachinesPage() {
                 </label>
 
                 <label className="block">
-                  <span className="block text-sm text-slate-600 mb-1">Serial No</span>
-                  <input
-                    type="text"
-                    value={formData.serialNo || ''}
-                    onChange={(e) => setFormData({ ...formData, serialNo: e.target.value || null })}
-                    className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-blue-500 focus:outline-none"
-                    placeholder="Serial number"
-                  />
-                </label>
-
-                <label className="block">
                   <span className="block text-sm text-slate-600 mb-1">Tonnage</span>
                   <input
                     type="number"
@@ -232,40 +200,6 @@ export function MachinesPage() {
                     }
                     className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-blue-500 focus:outline-none"
                     placeholder="e.g. 160"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="block text-sm text-slate-600 mb-1">Screw Diameter (mm)</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.screwDiameter ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        screwDiameter: e.target.value ? Number(e.target.value) : null,
-                      })
-                    }
-                    className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-blue-500 focus:outline-none"
-                    placeholder="e.g. 40"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="block text-sm text-slate-600 mb-1">Injection Weight (g)</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.injectionWeight ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        injectionWeight: e.target.value ? Number(e.target.value) : null,
-                      })
-                    }
-                    className="w-full bg-white rounded px-3 py-2 border border-slate-300 text-slate-900 focus:border-blue-500 focus:outline-none"
-                    placeholder="e.g. 230"
                   />
                 </label>
 
@@ -321,7 +255,7 @@ export function MachinesPage() {
                 <label className="flex items-center gap-2 col-span-2">
                   <input
                     type="checkbox"
-                    checked={formData.is2K}
+                    checked={formData.is2K || false}
                     onChange={(e) => setFormData({ ...formData, is2K: e.target.checked })}
                     className="w-4 h-4 rounded bg-slate-700 border-slate-600"
                   />
@@ -335,9 +269,7 @@ export function MachinesPage() {
                 </Button>
                 <Button
                   onClick={handleSave}
-                  disabled={
-                    !formData.machineName || createMutation.isPending || updateMutation.isPending
-                  }
+                  disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
                 >
                   {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
                 </Button>
@@ -352,8 +284,8 @@ export function MachinesPage() {
             <div className="bg-white rounded shadow-lg p-6 w-full max-w-md border border-slate-200">
               <h2 className="text-xl font-semibold text-slate-900 mb-4">Confirm Delete</h2>
               <p className="text-slate-600 mb-6">
-                Are you sure you want to delete this machine? This will also remove all associated
-                status logs and part mappings.
+                Are you sure you want to delete this work center? This will also remove all
+                associated status logs and item mappings.
               </p>
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
@@ -412,11 +344,9 @@ export function MachinesPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {machines.map((machine) => (
-                  <tr key={machine.machineId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono text-slate-500">{machine.machineId}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">
-                      {machine.machineName}
-                    </td>
+                  <tr key={machine.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-slate-500">{machine.id}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">{machine.name}</td>
                     <td className="px-4 py-3 text-slate-700">{machine.brand || '-'}</td>
                     <td className="px-4 py-3 text-sm text-slate-700">{machine.model || '-'}</td>
                     <td className="px-4 py-3 text-slate-700">
@@ -455,7 +385,7 @@ export function MachinesPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setDeleteConfirm(machine.machineId)}
+                          onClick={() => setDeleteConfirm(machine.id)}
                           className="p-1.5 hover:bg-red-50 rounded text-slate-400 hover:text-red-600"
                           title="Delete"
                         >
@@ -471,7 +401,7 @@ export function MachinesPage() {
         )}
 
         <footer className="mt-6 text-center text-sm text-slate-500">
-          {machines.length} machines total
+          {machines.length} work centers total
         </footer>
       </div>
     </>

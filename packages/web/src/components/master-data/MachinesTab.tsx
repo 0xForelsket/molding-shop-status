@@ -2,20 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge } from '../ui/badge';
 import { CrudTable } from '../ui/crud-table';
 
-interface Machine {
-  machineId: number;
-  machineName: string;
-  status: string;
-  tonnage: number | null;
-  machineType: string | null;
-  isActive: boolean;
-}
+import type { WorkCenter } from '../../lib/api';
 
 export function MachinesTab() {
-  const { data: machines = [], isLoading } = useQuery<Machine[]>({
+  const { data: machines = [], isLoading } = useQuery<WorkCenter[]>({
     queryKey: ['machines-all'],
     queryFn: async () => {
-      const res = await fetch('/api/machines');
+      const res = await fetch('/api/work-centers');
       if (!res.ok) throw new Error('Failed to fetch');
       return res.json();
     },
@@ -31,11 +24,11 @@ export function MachinesTab() {
       </div>
       <CrudTable
         data={machines}
-        keyField="machineId"
+        keyField="id"
         columns={[
-          { key: 'machineName', label: 'Name' },
+          { key: 'name', label: 'Name' },
           { key: 'tonnage', label: 'Tonnage', render: (v) => (v ? `${v}T` : '-') },
-          { key: 'machineType', label: 'Type' },
+          { key: 'type', label: 'Type' },
           {
             key: 'status',
             label: 'Status',
