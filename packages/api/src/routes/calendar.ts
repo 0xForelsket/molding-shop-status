@@ -75,14 +75,18 @@ calendarRoutes.patch(
   async (c) => {
     const { dates, dayType, name } = c.req.valid('json');
 
+    let updatedCount = 0;
     for (const date of dates) {
-      await db
+      const result = await db
         .update(plantCalendar)
         .set({ dayType, name: name || null })
-        .where(eq(plantCalendar.date, date));
+        .where(eq(plantCalendar.date, date))
+        .returning();
+
+      if (result.length > 0) updatedCount++;
     }
 
-    return c.json({ success: true, updated: dates.length });
+    return c.json({ success: true, updated: updatedCount });
   }
 );
 
