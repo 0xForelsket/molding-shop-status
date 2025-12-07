@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Clock, Copy, Factory, Package, Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DowntimeSlideout } from './DowntimeSlideout';
 import { ShiftDaySelector } from './ShiftDaySelector';
 import { ShiftTimeline } from './ShiftTimeline';
@@ -231,13 +231,15 @@ export function ShiftProductionPage() {
   });
 
   // Set initial shift when current shift loads
-  useMemo(() => {
+  // Using useEffect for side effects (setState), not useMemo
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - only run when currentShift changes
+  useEffect(() => {
     if (currentShift && !selectedShiftId) {
       setSelectedShiftId(currentShift.id);
       setTimeFrom(currentShift.startTime);
       setTimeTo(currentShift.endTime);
     }
-  }, [currentShift, selectedShiftId]);
+  }, [currentShift]);
 
   // Derive the shift instance ID from the selected shift and date
   const selectedShiftInstanceId = useMemo(() => {
