@@ -5,6 +5,7 @@ import { db } from '../index';
 import {
   downtimeReasons,
   items,
+  molds,
   productLines,
   productionSupervisors,
   routing,
@@ -14,7 +15,7 @@ import {
   workCenters,
 } from '../schema';
 import { ensureShiftSchedule, seedCalendar } from './calendar';
-import { machineSeeds } from './machines';
+import { moldSeeds } from './molds';
 import { machinePartSeeds, partSeeds } from './parts';
 import {
   downtimeReasonSeeds,
@@ -25,6 +26,7 @@ import {
   userSeeds,
 } from './reference-data';
 import { seedScrapReasons } from './scrap-reasons';
+import { workCenterSeeds } from './work-centers';
 
 async function seed() {
   console.log('🌱 Seeding database...\n');
@@ -84,10 +86,10 @@ async function seed() {
 
   // Seed work centers (formerly machines)
   console.log('  → Inserting work centers...');
-  for (const wc of machineSeeds) {
+  for (const wc of workCenterSeeds) {
     await db.insert(workCenters).values(wc).onConflictDoNothing();
   }
-  console.log(`    ✓ ${machineSeeds.length} work centers`);
+  console.log(`    ✓ ${workCenterSeeds.length} work centers`);
 
   // Seed production supervisors (must be before items due to FK)
   console.log('  → Inserting production supervisors...');
@@ -102,6 +104,13 @@ async function seed() {
     await db.insert(items).values(item).onConflictDoNothing();
   }
   console.log(`    ✓ ${partSeeds.length} items`);
+
+  // Seed molds (must be before routing due to FK)
+  console.log('  → Inserting molds...');
+  for (const mold of moldSeeds) {
+    await db.insert(molds).values(mold).onConflictDoNothing();
+  }
+  console.log(`    ✓ ${moldSeeds.length} molds`);
 
   // Seed routing (formerly machine-parts)
   console.log('  → Inserting routing...');
