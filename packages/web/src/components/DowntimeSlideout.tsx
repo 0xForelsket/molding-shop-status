@@ -14,8 +14,8 @@ interface DowntimeReason {
 interface DowntimeSlideoutProps {
   isOpen: boolean;
   onClose: () => void;
-  machineId: number;
-  machineName: string;
+  workCenterId: number;
+  workCenterName: string;
   shiftId: number;
   shiftDate: Date;
   downtimeReasons: DowntimeReason[];
@@ -24,8 +24,8 @@ interface DowntimeSlideoutProps {
 export function DowntimeSlideout({
   isOpen,
   onClose,
-  machineId,
-  machineName,
+  workCenterId,
+  workCenterName,
   shiftId,
   shiftDate,
   downtimeReasons,
@@ -39,7 +39,7 @@ export function DowntimeSlideout({
 
   const createDowntimeMutation = useMutation({
     mutationFn: async (data: {
-      machineId: number;
+      workCenterId: number;
       reasonCode: string;
       shiftId: number;
       notes: string;
@@ -76,7 +76,7 @@ export function DowntimeSlideout({
 
     const dateStr = shiftDate.toISOString().split('T')[0];
     createDowntimeMutation.mutate({
-      machineId,
+      workCenterId,
       reasonCode,
       shiftId,
       notes,
@@ -130,8 +130,8 @@ export function DowntimeSlideout({
 
         {/* Machine Info */}
         <div className="p-4 bg-slate-50 border-b border-slate-200">
-          <div className="text-sm text-slate-500">Machine</div>
-          <div className="font-bold text-slate-900">{machineName}</div>
+          <div className="text-sm text-slate-500">Work Center</div>
+          <div className="font-bold text-slate-900">{workCenterName}</div>
         </div>
 
         {/* Form */}

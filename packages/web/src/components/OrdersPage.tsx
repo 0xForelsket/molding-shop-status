@@ -12,44 +12,35 @@ import { DataTable } from './ui/data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 
-interface Part {
-  partNumber: string;
-  partName: string;
-  defaultMachineId: number | null;
-}
-
-interface Machine {
-  machineId: number;
-  machineName: string;
-}
+import { type Item, fetchItems, fetchWorkCenters } from '../lib/api';
 
 interface Order {
-  production_orders: {
+  order: {
     orderNumber: string;
-    partNumber: string;
+    itemNumber: string;
     quantityRequired: number;
     quantityCompleted: number;
     status: string;
-    machineId: number | null;
+    workCenterId: number | null;
     targetCycleTime: number | null;
     targetUtilization: number | null;
     dueDate: string | null;
     notes: string | null;
   };
-  parts: Part | null;
-  machines: { machineName: string; targetCycleTime: number | null } | null;
-  machine_parts: { targetCycleTime: number | null; cavityPlan: number | null } | null;
+  item: Item | null;
+  workCenter: { name: string; targetCycleTime: number | null } | null;
+  routing: { targetCycleTime: number | null; cavityPlan: number | null } | null;
 }
 
 // Flatten order for DataTable
 interface FlatOrder {
   orderNumber: string;
-  partNumber: string;
-  partName: string | null;
+  itemNumber: string;
+  itemName: string | null;
   quantityRequired: number;
   quantityCompleted: number;
   status: string;
-  machineName: string | null;
+  workCenterName: string | null;
   targetCycleTime: number | null;
   machineTargetCycleTime: number | null;
   targetUtilization: number | null;
@@ -63,44 +54,34 @@ async function fetchOrders(): Promise<Order[]> {
   return res.json();
 }
 
-async function fetchParts(): Promise<Part[]> {
-  const res = await fetch('/api/reference/parts');
-  if (!res.ok) throw new Error('Failed to fetch parts');
-  return res.json();
-}
-
-async function fetchMachines(): Promise<Machine[]> {
-  const res = await fetch('/api/machines');
-  if (!res.ok) throw new Error('Failed to fetch machines');
-  return res.json();
-}
-
 export function OrdersPage() {
   const queryClient = useQueryClient();
   const { data: ordersRaw = [], isLoading } = useQuery({
     queryKey: ['orders'],
     queryFn: fetchOrders,
   });
-  const { data: parts = [] } = useQuery({ queryKey: ['parts'], queryFn: fetchParts });
-  const { data: machines = [] } = useQuery({ queryKey: ['machines'], queryFn: fetchMachines });
+  const { data: parts = [] } = useQuery({ queryKey: ['items'], queryFn: fetchItems });
+  const { data: machines = [] } = useQuery({
+    queryKey: ['work-centers'],
+    queryFn: fetchWorkCenters,
+  });
 
   // Flatten orders for the table
   const orders: FlatOrder[] = useMemo(
     () =>
       ordersRaw.map((o) => ({
-        orderNumber: o.production_orders.orderNumber,
-        partNumber: o.production_orders.partNumber,
-        partName: o.parts?.partName ?? null,
-        quantityRequired: o.production_orders.quantityRequired,
-        quantityCompleted: o.production_orders.quantityCompleted,
-        status: o.production_orders.status,
-        machineName: o.machines?.machineName ?? null,
-        targetCycleTime: o.production_orders.targetCycleTime,
-        machineTargetCycleTime:
-          o.machine_parts?.targetCycleTime ?? o.machines?.targetCycleTime ?? null,
-        targetUtilization: o.production_orders.targetUtilization,
-        dueDate: o.production_orders.dueDate,
-        notes: o.production_orders.notes,
+        orderNumber: o.order.orderNumber,
+        itemNumber: o.order.itemNumber,
+        itemName: o.item?.name ?? null,
+        quantityRequired: o.order.quantityRequired,
+        quantityCompleted: o.order.quantityCompleted,
+        status: o.order.status,
+        workCenterName: o.workCenter?.name ?? null,
+        targetCycleTime: o.order.targetCycleTime,
+        machineTargetCycleTime: o.routing?.targetCycleTime ?? o.workCenter?.targetCycleTime ?? null,
+        targetUtilization: o.order.targetUtilization,
+        dueDate: o.order.dueDate,
+        notes: o.order.notes,
       })),
     [ordersRaw]
   );
@@ -110,10 +91,10 @@ export function OrdersPage() {
   const [editingOrder, setEditingOrder] = useState<FlatOrder | null>(null);
   const [form, setForm] = useState({
     orderNumber: '',
-    partNumber: '',
+    itemNumber: '',
     quantityRequired: '',
     status: 'pending',
-    machineId: '',
+    workCenterId: '',
     targetCycleTime: '',
     targetUtilization: '',
     dueDate: '',
@@ -126,10 +107,10 @@ export function OrdersPage() {
     if (editingOrder) {
       setForm({
         orderNumber: editingOrder.orderNumber,
-        partNumber: editingOrder.partNumber,
+        itemNumber: editingOrder.itemNumber,
         quantityRequired: String(editingOrder.quantityRequired),
         status: editingOrder.status,
-        machineId: '', // We don't have machineId in FlatOrder easily available for editing yet, or we need to fetch it.
+        workCenterId: '', // We don't have workCenterId in FlatOrder easily available for editing yet, or we need to fetch it.
         // Actually, FlatOrder has machineName, but not ID.
         // For now, let's leave it empty or try to find it from machines list if needed.
         // But wait, the user wants to set it on CREATION.
@@ -148,10 +129,10 @@ export function OrdersPage() {
     } else {
       setForm({
         orderNumber: '',
-        partNumber: '',
+        itemNumber: '',
         quantityRequired: '',
         status: 'pending',
-        machineId: '',
+        workCenterId: '',
         targetCycleTime: '',
         targetUtilization: '',
         dueDate: '',
@@ -177,9 +158,9 @@ export function OrdersPage() {
           }
         : {
             orderNumber: data.orderNumber,
-            partNumber: data.partNumber,
+            itemNumber: data.itemNumber,
             quantityRequired: Number(data.quantityRequired),
-            machineId: data.machineId ? Number(data.machineId) : undefined,
+            workCenterId: data.workCenterId ? Number(data.workCenterId) : undefined,
             targetCycleTime: data.targetCycleTime ? Number(data.targetCycleTime) : undefined,
             targetUtilization: data.targetUtilization ? Number(data.targetUtilization) : undefined,
             dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
@@ -282,8 +263,8 @@ export function OrdersPage() {
           <div>
             <div className="font-medium text-slate-900">{row.getValue('orderNumber')}</div>
             <div className="text-xs text-slate-500">
-              {row.original.partNumber}
-              {row.original.partName && ` - ${row.original.partName}`}
+              {row.original.itemNumber}
+              {row.original.itemName && ` - ${row.original.itemName}`}
             </div>
             {row.original.notes && (
               <div className="text-xs text-slate-400 italic mt-0.5">{row.original.notes}</div>
@@ -379,10 +360,10 @@ export function OrdersPage() {
         ),
       },
       {
-        accessorKey: 'machineName',
-        header: 'Machine',
+        accessorKey: 'workCenterName',
+        header: 'Work Center',
         cell: ({ row }) => (
-          <span className="text-slate-400">{row.getValue('machineName') || '-'}</span>
+          <span className="text-slate-400">{row.getValue('workCenterName') || '-'}</span>
         ),
       },
       {
@@ -508,20 +489,20 @@ export function OrdersPage() {
                   </div>
                   <div>
                     <label
-                      htmlFor="partNumber"
+                      htmlFor="itemNumber"
                       className="block text-sm font-medium text-slate-600 mb-1"
                     >
-                      Part
+                      Item
                     </label>
                     <select
-                      id="partNumber"
-                      value={form.partNumber}
+                      id="itemNumber"
+                      value={form.itemNumber}
                       onChange={(e) => {
-                        const part = parts.find((p) => p.partNumber === e.target.value);
+                        // const item = parts.find((p) => p.itemNumber === e.target.value);
                         setForm((f) => ({
                           ...f,
-                          partNumber: e.target.value,
-                          machineId: part?.defaultMachineId ? String(part.defaultMachineId) : '',
+                          itemNumber: e.target.value,
+                          // workCenterId: item?.defaultWorkCenterId ? String(item.defaultWorkCenterId) : '', // Item doesn't have defaultWorkCenterId yet
                         }));
                       }}
                       className="w-full h-9 rounded border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -529,29 +510,29 @@ export function OrdersPage() {
                     >
                       <option value="">Select part...</option>
                       {parts.map((p) => (
-                        <option key={p.partNumber} value={p.partNumber}>
-                          {p.partNumber} - {p.partName}
+                        <option key={p.itemNumber} value={p.itemNumber}>
+                          {p.itemNumber} - {p.name}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
                     <label
-                      htmlFor="machineId"
+                      htmlFor="workCenterId"
                       className="block text-sm font-medium text-slate-600 mb-1"
                     >
-                      Preferred Machine
+                      Preferred Work Center
                     </label>
                     <select
-                      id="machineId"
-                      value={form.machineId}
-                      onChange={(e) => setForm((f) => ({ ...f, machineId: e.target.value }))}
+                      id="workCenterId"
+                      value={form.workCenterId}
+                      onChange={(e) => setForm((f) => ({ ...f, workCenterId: e.target.value }))}
                       className="w-full h-9 rounded border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                     >
                       <option value="">Auto-assign / None</option>
                       {machines.map((m) => (
-                        <option key={m.machineId} value={m.machineId}>
-                          {m.machineName}
+                        <option key={m.id} value={m.id}>
+                          {m.name}
                         </option>
                       ))}
                     </select>
@@ -687,7 +668,7 @@ export function OrdersPage() {
             </DialogHeader>
             <div className="mt-4 space-y-4">
               <p className="text-sm text-slate-400">
-                Paste data with 3 columns: <strong>Order #</strong>, <strong>Part #</strong>,{' '}
+                Paste data with 3 columns: <strong>Order #</strong>, <strong>Item #</strong>,{' '}
                 <strong>Quantity</strong> (tab-separated)
               </p>
               <textarea

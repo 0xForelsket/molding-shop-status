@@ -10,14 +10,7 @@ import { ShiftTimeline } from './ShiftTimeline';
 import { ProgressRing } from './ui/ProgressRing';
 
 // Types
-interface Machine {
-  machineId: number;
-  machineName: string;
-  status: 'running' | 'idle' | 'fault' | 'offline';
-  productionOrder: string | null;
-  quantityCompleted: number | null;
-  quantityRequired: number | null;
-}
+import { fetchWorkCenters } from '../lib/api';
 
 interface Shift {
   id: number;
@@ -37,14 +30,14 @@ interface ShiftInstance {
 }
 
 interface Order {
-  production_orders: {
+  order: {
     orderNumber: string;
-    partNumber: string;
+    itemNumber: string;
     quantityRequired: number;
     quantityCompleted: number;
     status: string;
   };
-  parts: { partName: string } | null;
+  item: { name: string } | null;
 }
 
 interface ProductionLog {
@@ -86,11 +79,6 @@ interface ScrapEntry {
 }
 
 // API functions
-async function fetchMachines(): Promise<Machine[]> {
-  const res = await fetch('/api/machines');
-  if (!res.ok) throw new Error('Failed to fetch machines');
-  return res.json();
-}
 
 async function fetchShifts(): Promise<Shift[]> {
   const res = await fetch('/api/shifts');
@@ -109,13 +97,12 @@ async function fetchAssignedOrders(): Promise<Order[]> {
   if (!res.ok) throw new Error('Failed to fetch orders');
   const allOrders = await res.json();
   return allOrders.filter(
-    (o: Order) =>
-      o.production_orders.status === 'assigned' || o.production_orders.status === 'running'
+    (o: Order) => o.order.status === 'assigned' || o.order.status === 'running'
   );
 }
 
-async function fetchRecentLogs(machineId: number): Promise<ProductionLog[]> {
-  const res = await fetch(`/api/production-logs?machineId=${machineId}`);
+async function fetchRecentLogs(workCenterId: number): Promise<ProductionLog[]> {
+  const res = await fetch(`/api/production-logs?workCenterId=${workCenterId}`);
   if (!res.ok) throw new Error('Failed to fetch logs');
   return res.json();
 }
@@ -173,7 +160,7 @@ export function ShiftProductionPage() {
   const queryClient = useQueryClient();
 
   // Selection state
-  const [selectedMachineId, setSelectedMachineId] = useState<number | null>(null);
+  const [selectedWorkCenterId, setSelectedWorkCenterId] = useState<number | null>(null);
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedShiftId, setSelectedShiftId] = useState<number | null>(null);
@@ -189,9 +176,9 @@ export function ShiftProductionPage() {
   const [showDowntime, setShowDowntime] = useState(false);
 
   // Queries
-  const { data: machines = [] } = useQuery({
-    queryKey: ['machines'],
-    queryFn: fetchMachines,
+  const { data: workCenters = [] } = useQuery({
+    queryKey: ['work-centers'],
+    queryFn: fetchWorkCenters,
   });
 
   const { data: shifts = [] } = useQuery({
@@ -210,9 +197,10 @@ export function ShiftProductionPage() {
   });
 
   const { data: recentLogs = [] } = useQuery({
-    queryKey: ['recent-logs', selectedMachineId],
-    queryFn: () => (selectedMachineId ? fetchRecentLogs(selectedMachineId) : Promise.resolve([])),
-    enabled: !!selectedMachineId,
+    queryKey: ['recent-logs', selectedWorkCenterId],
+    queryFn: () =>
+      selectedWorkCenterId ? fetchRecentLogs(selectedWorkCenterId) : Promise.resolve([]),
+    enabled: !!selectedWorkCenterId,
   });
 
   const { data: downtimeReasons = [] } = useQuery({
@@ -258,7 +246,7 @@ export function ShiftProductionPage() {
   // Create log mutation
   const createLogMutation = useMutation({
     mutationFn: async (data: {
-      machineId: number;
+      workCenterId: number;
       orderNumber: string;
       shiftInstanceId: number;
       quantityProduced: number;
@@ -269,7 +257,7 @@ export function ShiftProductionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          machineId: data.machineId,
+          workCenterId: data.workCenterId,
           orderNumber: data.orderNumber,
           shiftInstanceId: data.shiftInstanceId,
           quantityProduced: data.quantityProduced,
@@ -285,7 +273,7 @@ export function ShiftProductionPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recent-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['machines'] });
+      queryClient.invalidateQueries({ queryKey: ['work-centers'] });
       queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
       setQuantityProduced(0);
       setScrapEntries([]);
@@ -295,10 +283,10 @@ export function ShiftProductionPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMachineId || !selectedOrderNumber || !selectedShiftInstanceId) return;
+    if (!selectedWorkCenterId || !selectedOrderNumber || !selectedShiftInstanceId) return;
 
     createLogMutation.mutate({
-      machineId: selectedMachineId,
+      workCenterId: selectedWorkCenterId,
       orderNumber: selectedOrderNumber,
       shiftInstanceId: selectedShiftInstanceId,
       quantityProduced,
@@ -308,16 +296,14 @@ export function ShiftProductionPage() {
   };
 
   // Derived state
-  const selectedMachine = machines.find((m) => m.machineId === selectedMachineId);
-  const selectedOrder = assignedOrders.find(
-    (o) => o.production_orders.orderNumber === selectedOrderNumber
-  );
+  const selectedWorkCenter = workCenters.find((m) => m.id === selectedWorkCenterId);
+  const selectedOrder = assignedOrders.find((o) => o.order.orderNumber === selectedOrderNumber);
 
   const totalScrap = scrapEntries.reduce((sum, s) => sum + s.quantity, 0);
 
   // Previous shift logs (for summary)
   const previousShiftLogs = useMemo(() => {
-    if (!selectedMachineId || !recentLogs.length) return null;
+    if (!selectedWorkCenterId || !recentLogs.length) return null;
 
     // Find logs from previous shift
     const validLogs = recentLogs.filter((l) => l.productionLog && l.shiftInstance);
@@ -363,14 +349,14 @@ export function ShiftProductionPage() {
       scrapRate:
         totalProduced > 0 ? ((totalScrap / (totalProduced + totalScrap)) * 100).toFixed(1) : '0',
     };
-  }, [selectedMachineId, recentLogs, selectedDate, selectedShiftInstanceId]);
+  }, [selectedWorkCenterId, recentLogs, selectedDate, selectedShiftInstanceId]);
 
   // Running totals calculation
   const runningTotals = useMemo(() => {
     if (!selectedOrder) return null;
 
-    const current = selectedOrder.production_orders.quantityCompleted;
-    const required = selectedOrder.production_orders.quantityRequired;
+    const current = selectedOrder.order.quantityCompleted;
+    const required = selectedOrder.order.quantityRequired;
     const afterEntry = current + quantityProduced;
     const currentPercent = (current / required) * 100;
     const afterPercent = (afterEntry / required) * 100;
@@ -424,21 +410,25 @@ export function ShiftProductionPage() {
       {/* Left Panel - Machine List */}
       <div className="w-64 bg-white border-r border-slate-200 flex flex-col">
         <div className="p-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Machines</h2>
+          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Work Centers
+          </h2>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {machines.map((machine) => {
-            const progress = machine.quantityRequired
-              ? ((machine.quantityCompleted || 0) / machine.quantityRequired) * 100
+          {workCenters.map((workCenter) => {
+            const progress = workCenter.currentOrder?.quantityRequired
+              ? ((workCenter.currentOrder.quantityCompleted || 0) /
+                  workCenter.currentOrder.quantityRequired) *
+                100
               : 0;
-            const isSelected = selectedMachineId === machine.machineId;
+            const isSelected = selectedWorkCenterId === workCenter.id;
 
             return (
               <button
-                key={machine.machineId}
+                key={workCenter.id}
                 type="button"
                 onClick={() => {
-                  setSelectedMachineId(machine.machineId);
+                  setSelectedWorkCenterId(workCenter.id);
                   setSelectedOrderNumber('');
                 }}
                 className={`w-full p-3 rounded-lg transition-all text-left group border ${
@@ -452,37 +442,37 @@ export function ShiftProductionPage() {
                     progress={progress}
                     size={36}
                     strokeWidth={4}
-                    color={getStatusColor(machine.status)}
+                    color={getStatusColor(workCenter.status)}
                     showPercentage={false}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="text-base font-bold text-slate-800 truncate">
-                      {machine.machineName}
+                      {workCenter.name}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${getStatusBg(machine.status)}`} />
+                      <span className={`w-2 h-2 rounded-full ${getStatusBg(workCenter.status)}`} />
                       <span
                         className={`text-xs capitalize font-medium ${
-                          machine.status === 'running'
+                          workCenter.status === 'running'
                             ? 'text-emerald-700'
-                            : machine.status === 'idle'
+                            : workCenter.status === 'idle'
                               ? 'text-amber-700'
-                              : machine.status === 'fault'
+                              : workCenter.status === 'fault'
                                 ? 'text-red-700'
                                 : 'text-slate-500'
                         }`}
                       >
-                        {machine.status}
+                        {workCenter.status}
                       </span>
                     </div>
                   </div>
                 </div>
-                {machine.quantityRequired && (
+                {workCenter.currentOrder?.quantityRequired && (
                   <div className="text-xs text-slate-500 pl-[48px]">
                     <span className="font-medium text-slate-700">
-                      {(machine.quantityCompleted || 0).toLocaleString()}
+                      {(workCenter.currentOrder.quantityCompleted || 0).toLocaleString()}
                     </span>{' '}
-                    / {machine.quantityRequired.toLocaleString()}
+                    / {workCenter.currentOrder.quantityRequired.toLocaleString()}
                   </div>
                 )}
               </button>
@@ -564,7 +554,7 @@ export function ShiftProductionPage() {
             }}
           />
 
-          {selectedMachine ? (
+          {selectedWorkCenter ? (
             <>
               {/* Order Selection */}
               <div className="mb-8">
@@ -575,26 +565,17 @@ export function ShiftProductionPage() {
                 {assignedOrders.length > 0 ? (
                   <div className="grid gap-4 md:grid-cols-2">
                     {assignedOrders
-                      .filter(
-                        (o) =>
-                          o.production_orders.status === 'running' ||
-                          o.production_orders.status === 'assigned'
-                      )
+                      .filter((o) => o.order.status === 'running' || o.order.status === 'assigned')
                       .map((order) => {
-                        const isSelected =
-                          selectedOrderNumber === order.production_orders.orderNumber;
+                        const isSelected = selectedOrderNumber === order.order.orderNumber;
                         const progress =
-                          (order.production_orders.quantityCompleted /
-                            order.production_orders.quantityRequired) *
-                          100;
+                          (order.order.quantityCompleted / order.order.quantityRequired) * 100;
 
                         return (
                           <button
-                            key={order.production_orders.orderNumber}
+                            key={order.order.orderNumber}
                             type="button"
-                            onClick={() =>
-                              setSelectedOrderNumber(order.production_orders.orderNumber)
-                            }
+                            onClick={() => setSelectedOrderNumber(order.order.orderNumber)}
                             className={`p-4 rounded-xl border text-left transition-all flex items-center gap-4 ${
                               isSelected
                                 ? 'border-blue-500 bg-blue-50/50 shadow-sm ring-1 ring-blue-200'
@@ -611,27 +592,27 @@ export function ShiftProductionPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-baseline justify-between mb-1">
                                 <div className="font-bold text-slate-900 text-lg">
-                                  {order.production_orders.orderNumber}
+                                  {order.order.orderNumber}
                                 </div>
                                 <div className="text-right">
                                   <span className="text-2xl font-bold text-slate-800">
-                                    {order.production_orders.quantityCompleted.toLocaleString()}
+                                    {order.order.quantityCompleted.toLocaleString()}
                                   </span>
                                   <span className="text-xs text-slate-400 font-medium ml-1">
-                                    / {order.production_orders.quantityRequired.toLocaleString()}
+                                    / {order.order.quantityRequired.toLocaleString()}
                                   </span>
                                 </div>
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="text-sm text-slate-600 truncate font-medium">
-                                  {order.production_orders.partNumber}
+                                  {order.order.itemNumber}
                                 </div>
                                 <div className="text-xs font-bold text-indigo-600">
                                   {Math.round(progress)}%
                                 </div>
                               </div>
                               <div className="text-xs text-slate-500 mt-0.5 truncate">
-                                {order.parts?.partName}
+                                {order.item?.name}
                               </div>
                             </div>
                           </button>
@@ -857,12 +838,12 @@ export function ShiftProductionPage() {
       </div>
 
       {/* Downtime Slideout */}
-      {selectedMachine && selectedShiftId && (
+      {selectedWorkCenter && selectedShiftId && (
         <DowntimeSlideout
           isOpen={showDowntime}
           onClose={() => setShowDowntime(false)}
-          machineId={selectedMachine.machineId}
-          machineName={selectedMachine.machineName}
+          workCenterId={selectedWorkCenter.id}
+          workCenterName={selectedWorkCenter.name}
           shiftId={selectedShiftId}
           shiftDate={selectedDate}
           downtimeReasons={downtimeReasons}

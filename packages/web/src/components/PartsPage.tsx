@@ -5,63 +5,51 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Image as ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchMachines } from '../lib/api';
+import { type Item, fetchItems, fetchWorkCenters } from '../lib/api';
 import { getAuthHeader } from '../lib/auth';
 import { Button } from './ui/button';
 import { DataTable } from './ui/data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 
-interface Part {
-  partNumber: string;
-  partName: string;
-  imageUrl?: string | null;
-  productLine: string | null;
-  compatibleMachines?: string[];
-  machineIds?: number[];
-}
-
-async function fetchParts(): Promise<Part[]> {
-  const res = await fetch('/api/reference/parts');
-  if (!res.ok) throw new Error('Failed to fetch parts');
-  return res.json();
-}
-
 export function PartsPage() {
   const queryClient = useQueryClient();
-  const { data: parts = [], isLoading } = useQuery({ queryKey: ['parts'], queryFn: fetchParts });
-  const { data: machines = [] } = useQuery({ queryKey: ['machines'], queryFn: fetchMachines });
+  const { data: parts = [], isLoading } = useQuery({ queryKey: ['items'], queryFn: fetchItems });
+  const { data: machines = [] } = useQuery({
+    queryKey: ['work-centers'],
+    queryFn: fetchWorkCenters,
+  });
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingPart, setEditingPart] = useState<Part | null>(null);
+  const [editingPart, setEditingPart] = useState<Item | null>(null);
   const [form, setForm] = useState({
-    partNumber: '',
-    partName: '',
+    itemNumber: '',
+    name: '',
     imageUrl: '',
     productLine: '',
-    machineIds: [] as number[],
+    workCenterIds: [] as number[],
   });
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (editingPart) {
       setForm({
-        partNumber: editingPart.partNumber,
-        partName: editingPart.partName,
+        itemNumber: editingPart.itemNumber,
+        name: editingPart.name,
         imageUrl: editingPart.imageUrl ?? '',
         productLine: editingPart.productLine ?? '',
-        machineIds: editingPart.machineIds ?? [],
+        workCenterIds: editingPart.workCenterIds ?? [],
       });
     } else {
-      setForm({ partNumber: '', partName: '', imageUrl: '', productLine: '', machineIds: [] });
+      setForm({ itemNumber: '', name: '', imageUrl: '', productLine: '', workCenterIds: [] });
     }
   }, [editingPart]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: typeof form) => {
       const url = editingPart
-        ? `/api/reference/parts/${encodeURIComponent(editingPart.partNumber)}`
-        : '/api/reference/parts';
+        ? `/api/reference/items/${encodeURIComponent(editingPart.itemNumber)}`
+        : '/api/reference/items';
       const method = editingPart ? 'PATCH' : 'POST';
 
       const res = await fetch(url, {
@@ -77,15 +65,15 @@ export function PartsPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['parts'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
       setDialogOpen(false);
       setEditingPart(null);
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (partNumber: string) => {
-      const res = await fetch(`/api/reference/parts/${encodeURIComponent(partNumber)}`, {
+    mutationFn: async (itemNumber: string) => {
+      const res = await fetch(`/api/reference/items/${encodeURIComponent(itemNumber)}`, {
         method: 'DELETE',
         headers: getAuthHeader(),
       });
@@ -95,7 +83,7 @@ export function PartsPage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['parts'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
     },
   });
 
@@ -105,20 +93,20 @@ export function PartsPage() {
   };
 
   const handleDelete = useCallback(
-    (partNumber: string) => {
-      if (confirm(`Delete part ${partNumber}?`)) {
-        deleteMutation.mutate(partNumber);
+    (itemNumber: string) => {
+      if (confirm(`Delete part ${itemNumber}?`)) {
+        deleteMutation.mutate(itemNumber);
       }
     },
     [deleteMutation]
   );
 
-  const columns = useMemo<ColumnDef<Part>[]>(
+  const columns = useMemo<ColumnDef<Item>[]>(
     () => [
       {
-        accessorKey: 'partNumber',
+        accessorKey: 'itemNumber',
         header: 'Part Number',
-        cell: ({ row }) => <span className="font-mono">{row.getValue('partNumber')}</span>,
+        cell: ({ row }) => <span className="font-mono">{row.getValue('itemNumber')}</span>,
       },
       {
         accessorKey: 'imageUrl',
@@ -134,14 +122,14 @@ export function PartsPage() {
           return (
             <img
               src={url}
-              alt={row.original.partName}
+              alt={row.original.name}
               className="w-10 h-10 object-cover rounded bg-slate-100"
             />
           );
         },
       },
       {
-        accessorKey: 'partName',
+        accessorKey: 'name',
         header: 'Part Name',
       },
       {
@@ -152,10 +140,10 @@ export function PartsPage() {
         ),
       },
       {
-        accessorKey: 'compatibleMachines',
-        header: 'Compatible Machines',
+        accessorKey: 'compatibleWorkCenters',
+        header: 'Compatible Work Centers',
         cell: ({ row }) => {
-          const machines = row.original.compatibleMachines || [];
+          const machines = row.original.compatibleWorkCenters || [];
           if (machines.length === 0)
             return <span className="text-slate-400 italic text-xs">None</span>;
           return (
@@ -192,7 +180,7 @@ export function PartsPage() {
             <Button
               size="icon"
               variant="ghost"
-              onClick={() => handleDelete(row.original.partNumber)}
+              onClick={() => handleDelete(row.original.itemNumber)}
               className="h-8 w-8 text-slate-400 hover:text-red-600"
             >
               <Trash2 className="h-4 w-4" />
@@ -228,7 +216,7 @@ export function PartsPage() {
           <DataTable
             columns={columns}
             data={parts}
-            searchKey="partNumber"
+            searchKey="itemNumber"
             searchPlaceholder="Search by part number..."
           />
         )}
@@ -246,8 +234,8 @@ export function PartsPage() {
               </label>
               <Input
                 id="partNumber"
-                value={form.partNumber}
-                onChange={(e) => setForm((f) => ({ ...f, partNumber: e.target.value }))}
+                value={form.itemNumber}
+                onChange={(e) => setForm((f) => ({ ...f, itemNumber: e.target.value }))}
                 placeholder="e.g., 141929-00"
                 disabled={!!editingPart}
                 required
@@ -259,8 +247,8 @@ export function PartsPage() {
               </label>
               <Input
                 id="partName"
-                value={form.partName}
-                onChange={(e) => setForm((f) => ({ ...f, partName: e.target.value }))}
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="e.g., Lower Housing USB"
                 required
               />
@@ -281,30 +269,30 @@ export function PartsPage() {
             </div>
             <div>
               <span className="block text-sm font-medium text-slate-600 mb-2">
-                Compatible Machines
+                Compatible Work Centers
               </span>
               <div className="border border-slate-200 rounded-md p-3 h-48 overflow-y-auto bg-slate-50 grid grid-cols-2 gap-2">
                 {machines.map((machine) => (
                   <label
-                    key={machine.machineId}
+                    key={machine.id}
                     className="flex items-center gap-2 p-1 hover:bg-white rounded cursor-pointer"
                   >
                     <input
                       type="checkbox"
-                      checked={form.machineIds.includes(machine.machineId)}
+                      checked={form.workCenterIds.includes(machine.id)}
                       onChange={(e) => {
                         const checked = e.target.checked;
                         setForm((f) => ({
                           ...f,
-                          machineIds: checked
-                            ? [...f.machineIds, machine.machineId]
-                            : f.machineIds.filter((id) => id !== machine.machineId),
+                          workCenterIds: checked
+                            ? [...f.workCenterIds, machine.id]
+                            : f.workCenterIds.filter((id) => id !== machine.id),
                         }));
                       }}
                       className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     />
                     <span className="text-sm text-slate-700">
-                      {machine.machineName}{' '}
+                      {machine.name}{' '}
                       <span className="text-slate-400 text-xs">({machine.model})</span>
                     </span>
                   </label>
