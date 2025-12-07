@@ -17,6 +17,87 @@ import { jwtAuth, requireRole } from '../middleware/auth';
 
 export const calendarRoutes = new Hono();
 
+// ============== HELPER FUNCTIONS ==============
+
+// Combine date + time string into timestamp
+function combineDateAndTime(dateStr: string, timeStr: string, addDays = 0): Date {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  const date = new Date(`${dateStr}T00:00:00`);
+  date.setHours(hours, minutes, 0, 0);
+  if (addDays > 0) {
+    date.setDate(date.getDate() + addDays);
+  }
+  return date;
+}
+
+// Generate shift instances for a specific date (idempotent)
+async function generateShiftInstancesForDate(dateStr: string): Promise<number> {
+  // Get all active shift templates
+  const shiftTemplates = await db.select().from(shifts).where(eq(shifts.isActive, true));
+  const templateBreaks = await db.select().from(shiftBreaks);
+
+  let instancesCreated = 0;
+
+  for (const template of shiftTemplates) {
+    // Calculate planned start and end timestamps
+    const plannedStartAt = combineDateAndTime(dateStr, template.startTime);
+
+    // Handle overnight shifts (night shift ending next day)
+    const startHour = Number.parseInt(template.startTime.split(':')[0]);
+    const endHour = Number.parseInt(template.endTime.split(':')[0]);
+    const crossesMidnight = endHour < startHour;
+
+    const plannedEndAt = combineDateAndTime(dateStr, template.endTime, crossesMidnight ? 1 : 0);
+
+    // Check if instance already exists
+    const existing = await db
+      .select()
+      .from(shiftInstances)
+      .where(
+        and(
+          eq(shiftInstances.shiftTemplateId, template.id),
+          eq(shiftInstances.productionDate, dateStr)
+        )
+      );
+
+    if (existing.length > 0) continue;
+
+    // Insert shift instance
+    const result = await db
+      .insert(shiftInstances)
+      .values({
+        shiftTemplateId: template.id,
+        productionDate: dateStr,
+        plannedStartAt,
+        plannedEndAt,
+        status: 'scheduled',
+        isOvertime: false,
+      })
+      .returning();
+
+    if (result.length > 0) {
+      instancesCreated++;
+
+      // Create instance breaks from template defaults
+      const breaks = templateBreaks.filter((b) => b.shiftId === template.id && b.isActive);
+
+      for (const brk of breaks) {
+        const breakStartAt = combineDateAndTime(dateStr, brk.startTime);
+        const breakEndAt = combineDateAndTime(dateStr, brk.endTime);
+
+        await db.insert(shiftInstanceBreaks).values({
+          shiftInstanceId: result[0].id,
+          name: brk.name,
+          startTime: breakStartAt,
+          endTime: breakEndAt,
+        });
+      }
+    }
+  }
+
+  return instancesCreated;
+}
+
 // ============== PLANT CALENDAR ==============
 
 // Get calendar entries for a date range
@@ -56,6 +137,11 @@ calendarRoutes.patch(
 
     await db.update(plantCalendar).set(updates).where(eq(plantCalendar.date, date));
 
+    // Auto-generate shift instances if day is now working
+    if (updates.dayType === 'working') {
+      await generateShiftInstancesForDate(date);
+    }
+
     return c.json({ success: true });
   }
 );
@@ -83,12 +169,49 @@ calendarRoutes.patch(
         .where(eq(plantCalendar.date, date))
         .returning();
 
-      if (result.length > 0) updatedCount++;
+      if (result.length > 0) {
+        updatedCount++;
+
+        // Auto-generate shift instances if day is now working
+        if (dayType === 'working') {
+          await generateShiftInstancesForDate(date);
+        }
+      }
     }
 
     return c.json({ success: true, updated: updatedCount });
   }
 );
+
+// Ensure shift instances exist for a date (public endpoint for frontend fallback)
+calendarRoutes.post('/ensure-shift-instances', async (c) => {
+  const date = c.req.query('date');
+
+  if (!date) {
+    return c.json({ error: 'date query parameter required' }, 400);
+  }
+
+  // Ensure calendar entry exists
+  const calendarEntry = await db
+    .select()
+    .from(plantCalendar)
+    .where(eq(plantCalendar.date, date))
+    .limit(1);
+
+  if (calendarEntry.length === 0) {
+    // Create calendar entry as working day
+    await db.insert(plantCalendar).values({
+      date,
+      dayType: 'working',
+    });
+  } else if (calendarEntry[0].dayType !== 'working' && calendarEntry[0].dayType !== 'special') {
+    // Don't create shift instances for non-working days
+    return c.json({ success: true, created: 0, message: 'Day is not a working day' });
+  }
+
+  const created = await generateShiftInstancesForDate(date);
+  return c.json({ success: true, created });
+});
 
 // ============== SHIFT INSTANCES ==============
 

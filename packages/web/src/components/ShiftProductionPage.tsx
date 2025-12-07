@@ -26,6 +26,16 @@ interface Shift {
   endTime: string;
 }
 
+interface ShiftInstance {
+  id: number;
+  shiftTemplateId: number;
+  productionDate: string;
+  shiftName: string;
+  plannedStartAt: string;
+  plannedEndAt: string;
+  status: string;
+}
+
 interface Order {
   production_orders: {
     orderNumber: string;
@@ -115,6 +125,16 @@ async function fetchScrapReasons(): Promise<ScrapReason[]> {
   return res.json();
 }
 
+async function fetchShiftInstances(date: string): Promise<ShiftInstance[]> {
+  const res = await fetch(`/api/calendar/shift-instances?startDate=${date}&endDate=${date}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+async function ensureShiftInstances(date: string): Promise<void> {
+  await fetch(`/api/calendar/ensure-shift-instances?date=${date}`, { method: 'POST' });
+}
+
 // Helper functions
 function getStatusColor(status: string): 'emerald' | 'amber' | 'red' | 'slate' {
   switch (status) {
@@ -198,7 +218,19 @@ export function ShiftProductionPage() {
     queryFn: fetchScrapReasons,
   });
 
-  // Set initial shift when loaded
+  // Fetch shift instances for the selected date
+  const selectedDateStr = selectedDate.toISOString().split('T')[0];
+  const { data: shiftInstances = [] } = useQuery({
+    queryKey: ['shift-instances', selectedDateStr],
+    queryFn: async () => {
+      // First ensure shift instances exist
+      await ensureShiftInstances(selectedDateStr);
+      // Then fetch them
+      return fetchShiftInstances(selectedDateStr);
+    },
+  });
+
+  // Set initial shift when current shift loads
   useMemo(() => {
     if (currentShift && !selectedShiftId) {
       setSelectedShiftId(currentShift.id);
@@ -207,26 +239,30 @@ export function ShiftProductionPage() {
     }
   }, [currentShift, selectedShiftId]);
 
+  // Derive the shift instance ID from the selected shift and date
+  const selectedShiftInstanceId = useMemo(() => {
+    if (!selectedShiftId || shiftInstances.length === 0) return null;
+    const instance = shiftInstances.find((si) => si.shiftTemplateId === selectedShiftId);
+    return instance?.id ?? null;
+  }, [selectedShiftId, shiftInstances]);
+
   // Create log mutation
   const createLogMutation = useMutation({
     mutationFn: async (data: {
       machineId: number;
       orderNumber: string;
-      shiftId: number;
-      productionDate: string;
+      shiftInstanceId: number;
       quantityProduced: number;
       scraps: { reasonId: number; quantity: number }[];
       notes: string;
     }) => {
-      // The API now handles shift instance creation automatically
       const res = await fetch('/api/production-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           machineId: data.machineId,
           orderNumber: data.orderNumber,
-          shiftId: data.shiftId,
-          productionDate: data.productionDate,
+          shiftInstanceId: data.shiftInstanceId,
           quantityProduced: data.quantityProduced,
           scraps: data.scraps,
           notes: data.notes,
@@ -250,13 +286,12 @@ export function ShiftProductionPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMachineId || !selectedOrderNumber || !selectedShiftId) return;
+    if (!selectedMachineId || !selectedOrderNumber || !selectedShiftInstanceId) return;
 
     createLogMutation.mutate({
       machineId: selectedMachineId,
       orderNumber: selectedOrderNumber,
-      shiftId: selectedShiftId,
-      productionDate: selectedDate.toISOString().split('T')[0],
+      shiftInstanceId: selectedShiftInstanceId,
       quantityProduced,
       scraps: scrapEntries.map(({ reasonId, quantity }) => ({ reasonId, quantity })),
       notes,
